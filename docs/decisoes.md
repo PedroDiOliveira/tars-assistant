@@ -47,6 +47,13 @@ O protótipo mostrava informação demais de uma vez. Princípio adotado: **uma 
 | Estudos | segmentos semana/mês, todas as matérias, 10 sessões | só semana, 5 sessões (+ "mostrar mais") |
 | Leitura | 4 abas de estado + lista filtrada | lista única ordenada por estado |
 
+A marcação do item ativo é **uma pílula única que desliza** até o item tocado (420 ms, curva de desaceleração), em vez de sumir de um e aparecer no outro. Dois detalhes que fazem a diferença:
+
+- A posição é `translateX(índice × 100%)`, calculada a partir da largura igual dos itens. Não medimos o DOM, então não há salto no primeiro quadro nem recálculo ao girar a tela.
+- O destino é marcado **no toque**, derivado em tempo de render a partir da rota de origem (sem `useEffect` sincronizando estado). Esperar a navegação resolver deixava a pílula ~160 ms parada, e o movimento parecia travado.
+
+A animação respeita `prefers-reduced-motion`.
+
 A barra inferior passou a ser **flutuante e só de ícones**: descolada das bordas, totalmente arredondada, com a aba ativa em pílula preenchida. Os rótulos continuam no HTML como texto para leitores de tela (`sr-only`), e cada alvo de toque tem 75×48 px.
 
 O vidro usa `backdrop-blur-md` (12 px) com fundo a 25% de opacidade e saturação alta. **Desfoque grande demais é contraproducente**: com 64 px o fundo virava uma mancha uniforme e dava a impressão de que o efeito não existia. Há um fundo opaco de reserva via `supports-backdrop-filter` para navegadores sem suporte.
