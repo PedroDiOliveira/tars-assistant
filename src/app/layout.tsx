@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes";
 import { BootCheck } from "@/components/layout/boot-check";
 import { ServiceWorkerRegister } from "@/components/layout/service-worker";
 import { AppLaunch } from "@/components/layout/app-launch";
+import { KeyboardInsetSync } from "@/components/layout/keyboard-sync";
 import { DataProvider } from "@/data/provider";
 import { Toaster } from "@/components/ui/sonner";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
@@ -71,6 +72,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </DataProvider>
         </ThemeProvider>
         <ServiceWorkerRegister />
+        <KeyboardInsetSync />
         <BootCheck />
       </body>
     </html>

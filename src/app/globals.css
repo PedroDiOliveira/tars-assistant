@@ -59,6 +59,14 @@
 :root {
   --radius: 1rem;
 
+  /*
+   * Teclado virtual. `KeyboardInsetSync` (JS) escreve `--kb-inset` e `--vv-height` no <html> e marca
+   * `data-keyboard` enquanto o teclado está aberto. Sem teclado valem estes padrões.
+   */
+  --kb-inset: 0px;
+  /* Área segura de baixo (barra home do iPhone). Com o teclado aberto ele já a cobre: ver html[data-keyboard]. */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
   --pine: #084734;
   --lime: #cef17b;
   --tea: #cdedb3;
@@ -203,11 +211,29 @@
   }
 }
 
+html[data-keyboard] {
+  --safe-bottom: 0px;
+}
+
 @layer utilities {
   .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: var(--safe-bottom);
   }
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }
+  /* Barra fixa embaixo que só atrapalha enquanto se digita (o teclado a empurraria para cima dos campos). */
+  html[data-keyboard] .kb-hide {
+    display: none;
+  }
+}
+
+/*
+ * Sheets (`Sheet`, vaul): colados no topo do teclado e nunca mais altos que a parte visível da tela.
+ * Fora das camadas do Tailwind de propósito: precisa vencer `bottom-0` e `max-h-*` do componente base do drawer.
+ * Sem teclado: `bottom: 0` e, no máximo, 92% da altura da tela, como antes.
+ */
+[data-slot="drawer-content"].sheet-content[data-vaul-drawer-direction="bottom"] {
+  bottom: var(--kb-inset);
+  max-height: min(92dvh, calc(var(--vv-height, 100dvh) - env(safe-area-inset-top, 0px) - 0.5rem));
 }

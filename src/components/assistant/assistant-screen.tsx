@@ -13,6 +13,7 @@ import type { TxProposal } from "@/domain/quick-entry";
 import { acceptAiConsent, assistant, useAccount, useActions, useAiConsent, useData, useToday } from "@/data";
 import { formatDayRelative } from "@/lib/format";
 import { uid } from "@/lib/id";
+import { KEYBOARD_EVENT } from "@/lib/keyboard";
 import { notify } from "@/components/shared/notify";
 
 
@@ -66,6 +67,15 @@ function AssistantScreenContent() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, thinking]);
+
+  // Teclado aberto: a barra de mensagem sobe para cima dele e cobriria a última resposta; volta ao fim da conversa.
+  useEffect(() => {
+    const onKeyboard = () => {
+      if (document.documentElement.hasAttribute("data-keyboard")) endRef.current?.scrollIntoView({ block: "end" });
+    };
+    window.addEventListener(KEYBOARD_EVENT, onKeyboard);
+    return () => window.removeEventListener(KEYBOARD_EVENT, onKeyboard);
+  }, []);
 
   async function send(raw: string) {
     const question = raw.trim();
@@ -133,7 +143,8 @@ function AssistantScreenContent() {
     <div data-module="primary" className="flex min-h-dvh flex-col">
       <SubHeader title="Assistente" backHref="/inicio" />
 
-      <div className="flex-1 space-y-3 px-4 pt-2 pb-48">
+      {/* O espaço embaixo cresce com o teclado: a barra fixa sobe e não pode esconder o fim da conversa. */}
+      <div className="flex-1 space-y-3 px-4 pt-2" style={{ paddingBottom: "calc(12rem + var(--kb-inset))" }}>
         {account.isLive ? null : (
           <div className="flex gap-2 rounded-xl bg-warning-soft p-3 text-sm text-warning-ink">
             <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -211,8 +222,8 @@ function AssistantScreenContent() {
         <div ref={endRef} />
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40">
-        <div className="mx-auto max-w-md space-y-2 border-t bg-background/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
+      <div className="fixed inset-x-0 bottom-(--kb-inset) z-40">
+        <div className="mx-auto max-w-md space-y-2 border-t bg-background/95 p-3 pb-[max(0.75rem,var(--safe-bottom))] backdrop-blur-xl">
           <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
             {SUGGESTIONS.map((s) => (
               <button

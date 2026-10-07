@@ -16,7 +16,8 @@
     "db:test": "vitest run supabase/tests",
     "db:push": "npx --yes supabase db push",
     "db:link": "npx --yes supabase link",
-    "test:e2e:live": "node e2e/live.mjs"
+    "test:e2e:live": "node e2e/live.mjs",
+    "test:e2e:keyboard": "node e2e/keyboard.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

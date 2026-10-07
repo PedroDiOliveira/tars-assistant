@@ -215,9 +215,9 @@ function ActiveSession() {
         </label>
       </div>
 
-      {/* Barra inferior: descanso + finalizar */}
-      <div className="fixed inset-x-0 bottom-0 z-40">
-        <div className="mx-auto max-w-md space-y-2 border-t bg-background/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
+      {/* Barra inferior: descanso + finalizar. Some com o teclado aberto: ela subiria junto e cobriria o campo digitado. */}
+      <div className="kb-hide fixed inset-x-0 bottom-0 z-40">
+        <div className="mx-auto max-w-md space-y-2 border-t bg-background/95 p-3 pb-[max(0.75rem,var(--safe-bottom))] backdrop-blur-xl">
           {rest ? (
             <RestTimer
               rest={rest}
