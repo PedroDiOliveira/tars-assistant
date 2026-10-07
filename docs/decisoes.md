@@ -35,6 +35,14 @@ Regras que vieram junto:
 - As cores por módulo deixaram de ser cores avulsas (índigo/laranja/azul/rosa) e passaram a ser variações da mesma família.
 - Ícone do app, `theme-color` do navegador e manifesto do PWA seguem a paleta.
 
+## Marca
+
+O nome vem do robô de *Interstellar*, e a marca traduz isso sem ilustrar nada: **quatro lâminas verticais idênticas, deslocadas umas em relação às outras** — o monólito segmentado no instante em que se articula para andar.
+
+A regra que define o desenho: **as alturas são iguais de propósito.** As primeiras tentativas usaram lâminas em degrau ascendente e todas liam como gráfico de barras ou sinal de celular — o clichê que um app de metas tem mais obrigação de evitar. Com alturas iguais não há o que "medir", então o olho lê um objeto em movimento. As fendas são estreitas para o conjunto continuar sendo uma silhueta só até 18 px.
+
+A forma é uma só, em `currentColor`, servindo cabeçalho, ícone do app e os dois temas: [`src/components/brand/logo.tsx`](../src/components/brand/logo.tsx). Versões soltas em [`docs/brand/`](brand). No ícone do app a mesma geometria é reduzida a 68% para respirar dentro do quadrado.
+
 ## Densidade: o que saiu da tela (pedido do Pedro)
 
 O protótipo mostrava informação demais de uma vez. Princípio adotado: **uma informação por linha, o resto a um toque de distância** (inspiração declarada: Nubank e AGF).

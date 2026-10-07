@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/brand/app-icon.svg" width="76" alt="Tars logo" />
+
 # Tars
 
 **A personal goal-tracking app for money, training, studying and reading — built mobile-first.**
@@ -149,6 +151,8 @@ Three rules keep it honest:
 1. **Screens never compute business values inline.** Totals, goals and periods all come from `src/domain`, which is why the home screen and each module can never show different numbers for the same period.
 2. **Screens never import the mock store.** They depend on `@/data` only.
 3. **Design tokens live in one file.** The entire palette — Emerald Pine `#084734`, Lime Glow `#CEF17B`, Green Tea `#CDEDB3` — is defined at the top of [`globals.css`](src/app/globals.css), in light and dark variants.
+
+The logo is four identical vertical blades, offset from one another: the segmented monolith of the robot the app is named after, caught mid-stride. The heights are deliberately equal — blades of *different* heights read as a bar chart, which is exactly what a goal-tracking app should avoid looking like. It inherits `currentColor`, so one shape serves the header, the app icon and both themes ([`logo.tsx`](src/components/brand/logo.tsx), [`docs/brand/`](docs/brand)).
 
 ### Interface details worth calling out
 
