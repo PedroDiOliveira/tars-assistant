@@ -1,0 +1,212 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Todas as cores do app vivem aqui, em tokens. Para trocar a identidade visual, edite
+ * só as variáveis de :root e .dark (cor primária e uma cor por módulo).
+ */
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-heading: var(--font-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-ink: var(--success-ink);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-ink: var(--warning-ink);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-ink: var(--danger-ink);
+
+  /* cor do módulo corrente: defina data-module="finance|workout|study|reading" num ancestral */
+  --color-m: var(--m);
+  --color-m-soft: var(--m-soft);
+  --color-m-ink: var(--m-ink);
+
+  --color-finance: var(--finance);
+  --color-workout: var(--workout);
+  --color-study: var(--study);
+  --color-reading: var(--reading);
+
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.25);
+  --radius-2xl: calc(var(--radius) * 1.5);
+  --radius-3xl: calc(var(--radius) * 2);
+  --radius-4xl: calc(var(--radius) * 2.5);
+}
+
+:root {
+  --radius: 0.875rem;
+
+  --background: oklch(0.972 0.005 270);
+  --foreground: oklch(0.22 0.02 270);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 270);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 270);
+
+  --primary: oklch(0.52 0.21 277);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.945 0.012 275);
+  --secondary-foreground: oklch(0.3 0.06 277);
+  --muted: oklch(0.953 0.006 270);
+  --muted-foreground: oklch(0.5 0.02 270);
+  --accent: oklch(0.94 0.03 277);
+  --accent-foreground: oklch(0.38 0.14 277);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.92 0.006 270);
+  --input: oklch(0.89 0.008 270);
+  --ring: oklch(0.6 0.15 277);
+
+  --success: oklch(0.65 0.16 160);
+  --success-soft: oklch(0.96 0.035 160);
+  --success-ink: oklch(0.42 0.1 160);
+  --warning: oklch(0.78 0.15 75);
+  --warning-soft: oklch(0.965 0.045 85);
+  --warning-ink: oklch(0.47 0.11 65);
+  --danger-soft: oklch(0.96 0.03 25);
+  --danger-ink: oklch(0.5 0.19 27);
+
+  --finance: oklch(0.65 0.16 160);
+  --finance-soft: oklch(0.96 0.035 160);
+  --finance-ink: oklch(0.42 0.1 160);
+  --workout: oklch(0.7 0.18 50);
+  --workout-soft: oklch(0.965 0.035 60);
+  --workout-ink: oklch(0.48 0.13 45);
+  --study: oklch(0.65 0.15 235);
+  --study-soft: oklch(0.96 0.03 235);
+  --study-ink: oklch(0.42 0.12 240);
+  --reading: oklch(0.66 0.2 355);
+  --reading-soft: oklch(0.965 0.03 355);
+  --reading-ink: oklch(0.46 0.16 355);
+}
+
+.dark {
+  --background: oklch(0.165 0.012 270);
+  --foreground: oklch(0.96 0.005 270);
+  --card: oklch(0.215 0.014 270);
+  --card-foreground: oklch(0.96 0.005 270);
+  --popover: oklch(0.235 0.015 270);
+  --popover-foreground: oklch(0.96 0.005 270);
+
+  --primary: oklch(0.7 0.16 277);
+  --primary-foreground: oklch(0.15 0.02 277);
+  --secondary: oklch(0.28 0.02 275);
+  --secondary-foreground: oklch(0.95 0.01 275);
+  --muted: oklch(0.265 0.012 270);
+  --muted-foreground: oklch(0.72 0.015 270);
+  --accent: oklch(0.3 0.05 277);
+  --accent-foreground: oklch(0.9 0.05 277);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.6 0.12 277);
+
+  --success: oklch(0.75 0.16 160);
+  --success-soft: oklch(0.28 0.05 160);
+  --success-ink: oklch(0.85 0.12 160);
+  --warning: oklch(0.8 0.15 80);
+  --warning-soft: oklch(0.3 0.05 80);
+  --warning-ink: oklch(0.86 0.11 85);
+  --danger-soft: oklch(0.29 0.06 25);
+  --danger-ink: oklch(0.82 0.12 25);
+
+  --finance: oklch(0.75 0.16 160);
+  --finance-soft: oklch(0.28 0.05 160);
+  --finance-ink: oklch(0.85 0.12 160);
+  --workout: oklch(0.78 0.15 55);
+  --workout-soft: oklch(0.3 0.05 55);
+  --workout-ink: oklch(0.86 0.1 60);
+  --study: oklch(0.74 0.13 235);
+  --study-soft: oklch(0.29 0.05 240);
+  --study-ink: oklch(0.85 0.09 235);
+  --reading: oklch(0.74 0.17 355);
+  --reading-soft: oklch(0.3 0.06 355);
+  --reading-ink: oklch(0.86 0.1 355);
+}
+
+/* Seleciona a cor do módulo para todos os filhos (bg-m, text-m-ink, stroke-m...). */
+[data-module="finance"] {
+  --m: var(--finance);
+  --m-soft: var(--finance-soft);
+  --m-ink: var(--finance-ink);
+}
+[data-module="workout"] {
+  --m: var(--workout);
+  --m-soft: var(--workout-soft);
+  --m-ink: var(--workout-ink);
+}
+[data-module="study"] {
+  --m: var(--study);
+  --m-soft: var(--study-soft);
+  --m-ink: var(--study-ink);
+}
+[data-module="reading"] {
+  --m: var(--reading);
+  --m-soft: var(--reading-soft);
+  --m-ink: var(--reading-ink);
+}
+[data-module="primary"] {
+  --m: var(--primary);
+  --m-soft: var(--accent);
+  --m-ink: var(--accent-foreground);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  button,
+  [role="button"],
+  a {
+    touch-action: manipulation;
+  }
+  /* iOS dá zoom automático em inputs com fonte menor que 16px */
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+}
