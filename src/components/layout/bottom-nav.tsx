@@ -19,8 +19,9 @@ const ITEMS: NavItem[] = [
 ];
 
 /**
- * Barra flutuante: descolada das bordas, cantos arredondados e fundo translúcido com blur,
- * para o conteúdo aparecer desfocado por trás. O item ativo ganha uma "pílula" preenchida.
+ * Barra flutuante só de ícones: descolada das bordas, arredondada e com vidro bem translúcido
+ * (fundo pouco opaco + blur forte + saturação alta), para o conteúdo aparecer desfocado atrás.
+ * O rótulo continua no HTML como texto para leitores de tela.
  */
 export function BottomNav() {
   const pathname = usePathname();
@@ -29,13 +30,17 @@ export function BottomNav() {
       aria-label="Navegação principal"
       className="pointer-events-none fixed inset-x-0 bottom-0 z-40 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
     >
-      <div className="mx-auto max-w-md px-4">
+      <div className="mx-auto max-w-md px-6">
         <ul
           className={cn(
-            "pointer-events-auto flex items-center justify-between gap-1 rounded-full p-1.5",
-            "bg-card/70 backdrop-blur-2xl backdrop-saturate-150",
-            "shadow-[0_8px_32px_-8px_rgb(8_71_52/0.28)] ring-1 ring-foreground/8",
-            "dark:bg-card/60 dark:ring-white/10",
+            "pointer-events-auto flex items-center justify-between gap-1 rounded-full p-2",
+            // Vidro: desfoque moderado (um blur grande demais vira mancha e esconde o fundo),
+            // pouco pigmento e saturação alta. Sem backdrop-filter, cai para fundo opaco legível.
+            "bg-card/85 backdrop-blur-md backdrop-saturate-200 supports-backdrop-filter:bg-card/25",
+            // brilho de borda, como o vidro do iOS
+            "ring-1 ring-white/40 dark:ring-white/12",
+            "shadow-[0_10px_40px_-10px_rgb(8_71_52/0.35)]",
+            "dark:supports-backdrop-filter:bg-card/25",
           )}
         >
           {ITEMS.map((item) => {
@@ -47,14 +52,12 @@ export function BottomNav() {
                   href={item.href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex min-h-13 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-2 transition-colors",
-                    active ? "bg-primary text-primary-foreground" : "text-muted-foreground",
+                    "flex min-h-12 items-center justify-center rounded-full transition-colors",
+                    active ? "bg-primary text-primary-foreground" : "text-foreground/60",
                   )}
                 >
-                  <Icon className="size-5" strokeWidth={active ? 2.4 : 2} aria-hidden />
-                  <span className={cn("text-[11px] leading-none", active && "font-semibold")}>
-                    {item.label}
-                  </span>
+                  <Icon className="size-6" strokeWidth={active ? 2.3 : 1.9} aria-hidden />
+                  <span className="sr-only">{item.label}</span>
                 </Link>
               </li>
             );

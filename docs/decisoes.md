@@ -47,7 +47,9 @@ O protótipo mostrava informação demais de uma vez. Princípio adotado: **uma 
 | Estudos | segmentos semana/mês, todas as matérias, 10 sessões | só semana, 5 sessões (+ "mostrar mais") |
 | Leitura | 4 abas de estado + lista filtrada | lista única ordenada por estado |
 
-A barra inferior passou a ser **flutuante**: descolada das bordas, totalmente arredondada e translúcida com desfoque do conteúdo por trás (`backdrop-blur`), com a aba ativa em pílula preenchida.
+A barra inferior passou a ser **flutuante e só de ícones**: descolada das bordas, totalmente arredondada, com a aba ativa em pílula preenchida. Os rótulos continuam no HTML como texto para leitores de tela (`sr-only`), e cada alvo de toque tem 75×48 px.
+
+O vidro usa `backdrop-blur-md` (12 px) com fundo a 25% de opacidade e saturação alta. **Desfoque grande demais é contraproducente**: com 64 px o fundo virava uma mancha uniforme e dava a impressão de que o efeito não existia. Há um fundo opaco de reserva via `supports-backdrop-filter` para navegadores sem suporte.
 
 Componentes que ficaram sem uso foram removidos: `goal-card`, `progress-ring`, `page-title`, `category-breakdown`.
 
