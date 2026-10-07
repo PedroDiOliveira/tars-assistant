@@ -1,16 +1,11 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { cn } from "cn";
 import { AppHeader } from "./app-header";
 import { BottomNav } from "./bottom-nav";
 
 function Frame({ children, chrome }: { children: ReactNode; chrome: boolean }) {
-  useEffect(() => {
-    // Sinaliza que o JavaScript do app rodou; ver BootCheck.
-    document.documentElement.setAttribute("data-app-ready", "");
-  }, []);
-
   return (
     <div className="min-h-dvh bg-muted/40">
       <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col bg-background md:border-x">

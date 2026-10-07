@@ -160,6 +160,7 @@ The logo is four identical vertical blades, offset from one another: the segment
 - Touch targets are at least 44 px; the shadcn/ui defaults were adjusted upward for that.
 - Safe-area insets, no horizontal scroll at 375 px, and installable to the iOS home screen via a web manifest.
 - If the JavaScript never boots, an inline script explains why instead of leaving a skeleton spinning forever.
+- A 2.65-second branded launch animates the four logo blades, then fades into the loaded app. It runs on each full load and each return to the installed app, without replaying on internal navigation or resetting forms/timers. Reduced motion uses a brief static reveal. Thirteen portrait iPhone startup images match the logo and background before JavaScript starts; the native handoff still needs verification on a physical iPhone.
 
 ---
 
@@ -176,6 +177,7 @@ The end-to-end suite runs against the app served over the local network — the 
 ```bash
 npm test          # unit tests
 npm run test:e2e  # end-to-end flows (needs `npm run dev` running)
+npm run test:splash # launch, installed resume, accessibility and recovery flows
 npm run lint      # ESLint
 npm run build     # production build
 ```

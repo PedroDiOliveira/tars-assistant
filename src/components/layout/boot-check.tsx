@@ -4,7 +4,7 @@
  * falhou, extensão do navegador). O script é embutido no HTML: ele roda mesmo quando os
  * arquivos externos não carregam, que é justamente o caso que precisamos denunciar.
  *
- * O app marca `data-app-ready` em <html> assim que monta (ver AppShell); se a marca não
+ * O app marca `data-app-ready` em <html> assim que monta (ver AppLaunch); se a marca não
  * aparecer a tempo, mostramos uma explicação em vez do esqueleto girando para sempre.
  */
 const TIMEOUT_MS = 8000;
@@ -16,6 +16,15 @@ const SCRIPT = `
   function warn() {
     if (done || ready()) return;
     done = true;
+    var splash = document.querySelector(".launch-screen");
+    if (splash) splash.remove();
+    var content = document.querySelector(".app-content");
+    if (content) {
+      content.removeAttribute("inert");
+      content.removeAttribute("aria-hidden");
+      content.style.opacity = "1";
+    }
+    document.documentElement.style.overflow = "";
     var box = document.createElement("div");
     box.setAttribute("role", "alert");
     box.style.cssText = "position:fixed;inset:auto 0 0 0;z-index:2147483647;margin:12px;padding:16px;border-radius:16px;background:#084734;color:#fff;font:500 14px/1.5 system-ui,sans-serif;box-shadow:0 8px 32px rgba(0,0,0,.3)";

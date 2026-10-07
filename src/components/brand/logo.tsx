@@ -1,4 +1,5 @@
 import { cn } from "cn";
+import type { ComponentProps } from "react";
 
 /**
  * Marca do Tars.
@@ -21,9 +22,9 @@ const GAP = 1.2;
 const FIRST_X = 7.4;
 const RADIUS = 1.4;
 
-export function LogoMark({ className }: { className?: string }) {
+export function LogoMark({ className, ...props }: ComponentProps<"svg">) {
   return (
-    <svg viewBox="0 0 32 32" fill="currentColor" aria-hidden className={cn("size-7", className)}>
+    <svg viewBox="0 0 32 32" fill="currentColor" aria-hidden className={cn("size-7", className)} {...props}>
       {TOPS.map((top, i) => (
         <rect
           key={i}

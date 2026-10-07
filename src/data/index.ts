@@ -5,7 +5,7 @@
  * na fase real, só este arquivo troca para o Supabase. Telas e componentes nunca
  * importam `./mock/*` diretamente.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { todayKey, type DateKey } from "@/lib/dates";
 import type { DataSnapshot } from "@/domain/summary";
@@ -14,22 +14,23 @@ import { actions, ensureStoreReady, isStoreReady, useTarsStore, type Actions } f
 
 export type { Actions, FinishStudyResult, FinishWorkoutResult } from "./mock/store";
 
+function subscribeStoreReady(onReady: () => void) {
+  let subscribed = true;
+  ensureStoreReady().then(
+    () => { if (subscribed) onReady(); },
+    // StoreGate exposes its recovery UI if initialization fails.
+    () => undefined,
+  );
+  return () => { subscribed = false; };
+}
+
+const storeNotReadyOnServer = () => false;
+
 /** true quando os dados locais já foram carregados. Antes disso, mostre um esqueleto. */
 export function useStoreReady(): boolean {
-  // Começa falso no servidor e no primeiro carregamento (hidratação consistente). Nas navegações
-  // seguintes o módulo já está pronto e a tela aparece sem piscar o esqueleto.
-  const [ready, setReady] = useState<boolean>(() => isStoreReady());
-  useEffect(() => {
-    if (isStoreReady()) return;
-    let alive = true;
-    ensureStoreReady().then(() => {
-      if (alive) setReady(true);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
-  return ready;
+  // A streamed page may hydrate after AppLaunch has already initialized the store.
+  // Its first hydration render must still match the server's skeleton.
+  return useSyncExternalStore(subscribeStoreReady, isStoreReady, storeNotReadyOnServer);
 }
 
 /** Tudo o que o domínio lê para calcular totais, metas e históricos. */

@@ -1,0 +1,205 @@
+.app-launch {
+  display: contents;
+}
+
+/* Opacity preserves layout, scroll position and fixed navigation while data boots. */
+.app-content {
+  opacity: 1;
+  transition: opacity 550ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-launch-phase="playing"] > .app-content {
+  opacity: 0;
+}
+
+.launch-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  overflow: hidden;
+  isolation: isolate;
+  color: var(--lime);
+  background: var(--pine);
+  touch-action: none;
+  user-select: none;
+  transition: opacity 550ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.launch-atmosphere {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 40%, transparent 12%, #021e1899 100%),
+    radial-gradient(ellipse at 50% 115%, #cef17b1a, transparent 55%);
+  animation: launch-ambient-in 1600ms ease-out both;
+}
+
+.launch-artwork {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  width: 112px;
+  height: 112px;
+  margin: -56px 0 0 -56px;
+  transition: opacity 400ms ease, transform 550ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.launch-halo {
+  position: absolute;
+  inset: -140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #cef17b14, #cef17b05 42%, transparent 69%);
+  animation: launch-halo-in 1900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.launch-orbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 1px solid #cef17b0d;
+  border-radius: 50%;
+  /* The lower arcs dissolve before they reach the wordmark. */
+  mask-image: linear-gradient(#000 10%, #0006 55%, transparent 78%);
+  animation: launch-orbit-in 1800ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.launch-orbit-inner {
+  width: 264px;
+  height: 264px;
+  margin: -132px 0 0 -132px;
+  animation-delay: 150ms;
+}
+
+.launch-orbit-outer {
+  width: 440px;
+  height: 440px;
+  margin: -220px 0 0 -220px;
+  border-color: #cef17b08;
+  animation-delay: 300ms;
+}
+
+.launch-symbol {
+  position: relative;
+  /* The original mark's visual center is x=17 in its 32-unit viewBox. */
+  transform: translateX(-3.5px);
+}
+
+.launch-logo {
+  display: block;
+  width: 112px;
+  height: 112px;
+  overflow: visible;
+  filter: drop-shadow(0 8px 22px #021e1833);
+}
+
+.launch-logo rect {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: launch-blade-in 1100ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.launch-logo rect:nth-child(1) { --blade-y: 13px; --blade-turn: -7deg; }
+.launch-logo rect:nth-child(2) { --blade-y: -11px; --blade-turn: -3deg; animation-delay: 100ms; }
+.launch-logo rect:nth-child(3) { --blade-y: 11px; --blade-turn: 3deg; animation-delay: 200ms; }
+.launch-logo rect:nth-child(4) { --blade-y: -13px; --blade-turn: 7deg; animation-delay: 300ms; }
+
+.launch-wordmark {
+  position: absolute;
+  top: calc(100% + 24px);
+  left: 50%;
+  width: min(320px, 90vw);
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.launch-name {
+  margin: 0;
+  color: #f0f6e9;
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -1.8px;
+  animation: launch-type-in 850ms 430ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.launch-tagline {
+  margin: 13px 0 0;
+  color: #c4d9bf;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0.15px;
+  animation: launch-type-in 850ms 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.launch-footer {
+  position: absolute;
+  right: 24px;
+  bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+  left: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: #adc5a7;
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0.65px;
+  animation: launch-type-in 900ms 850ms ease both;
+}
+
+.launch-line {
+  width: 24px;
+  height: 1px;
+  background: #cef17b66;
+}
+
+[data-launch-phase="leaving"] > .launch-screen {
+  opacity: 0;
+}
+
+[data-launch-phase="leaving"] .launch-artwork {
+  opacity: 0;
+  transform: scale(1.035) translateY(-4px);
+}
+
+@keyframes launch-blade-in {
+  from { opacity: 0; transform: translateY(var(--blade-y)) rotate(var(--blade-turn)); }
+  65% { opacity: 1; }
+  to { opacity: 1; transform: translateY(0) rotate(0); }
+}
+
+@keyframes launch-type-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes launch-halo-in {
+  from { opacity: 0; transform: scale(0.65); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes launch-orbit-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes launch-ambient-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-height: 540px) {
+  .launch-artwork { top: 36%; }
+  .launch-footer { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .launch-footer span:last-child { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launch-screen *, .launch-screen *::before, .launch-screen *::after {
+    animation: none !important;
+  }
+  .launch-screen, .app-content { transition-duration: 120ms; }
+  .launch-artwork { transition: none; }
+  [data-launch-phase="leaving"] .launch-artwork { transform: none; }
+}

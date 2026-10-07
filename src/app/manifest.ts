@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
+import { LAUNCH_BACKGROUND } from "@/lib/startup-images";
 
 /** Permite "Adicionar à Tela de Início" (Safari/iOS) abrindo em tela cheia, sem a barra do navegador. */
 export default function manifest(): MetadataRoute.Manifest {
@@ -12,7 +13,7 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#f3f7ef",
+    background_color: LAUNCH_BACKGROUND,
     theme_color: "#084734",
     icons: [
       { src: "/icon", sizes: "512x512", type: "image/png", purpose: "any" },
