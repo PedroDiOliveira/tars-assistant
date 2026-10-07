@@ -18,11 +18,45 @@ Contexto que motivou as mudanças: o app é **de uso pessoal** e o objetivo é *
 | H | **Catálogos iniciais em PT-BR** (categorias, exercícios) e atalhos de uso recente. | Menos digitação. | `data/mock/seed.ts` |
 | I | **Sem botão flutuante global**: ações rápidas na Início, ação primária contextual em cada módulo, assistente como ícone no cabeçalho. | Resolve o conflito botão x barra inferior citado na spec §3. | `components/layout/app-header.tsx` |
 
+## Identidade visual (rodada de polimento)
+
+Paleta definida pelo Pedro, aplicada a todo o app:
+
+| Cor | Hex | Papel |
+| --- | --- | --- |
+| Emerald Pine | `#084734` | primária no tema claro (botões, item ativo), marca |
+| Lime Glow | `#CEF17B` | primária no tema escuro, texto sobre pine, destaques |
+| Green Tea | `#CDEDB3` | fundos suaves, superfícies de apoio |
+
+Regras que vieram junto:
+
+- **Tudo sai de [src/app/globals.css](../src/app/globals.css)**: mudar a identidade é mexer só nas variáveis do topo.
+- **Nada de cor fora da família verde.** Categorias, matérias e capas de livro continuam se distinguindo por matiz, mas restrito à faixa 95–185 (lime → esmeralda → teal) em [src/lib/hues.ts](../src/lib/hues.ts). Antes eram matizes de todo o círculo cromático e destoavam.
+- As cores por módulo deixaram de ser cores avulsas (índigo/laranja/azul/rosa) e passaram a ser variações da mesma família.
+- Ícone do app, `theme-color` do navegador e manifesto do PWA seguem a paleta.
+
+## Densidade: o que saiu da tela (pedido do Pedro)
+
+O protótipo mostrava informação demais de uma vez. Princípio adotado: **uma informação por linha, o resto a um toque de distância** (inspiração declarada: Nubank e AGF).
+
+| Tela | Antes | Agora |
+| --- | --- | --- |
+| Início | 4 cartões grandes com anel, selo de %, duas linhas de detalhe cada; seções de atenção (4 itens) e de sequências | 1 destaque (resultado do mês, número grande), 4 ações rápidas circulares, 1 cartão "Esta semana" com 3 linhas, no máximo 2 avisos. Sequências saíram para dentro dos módulos |
+| Finanças | resumo + 2 caixas + meta + todas as categorias + 3 controles de filtro sempre visíveis | destaque do mês, 4 categorias (+ "ver todas"), filtros atrás do botão "Filtrar", lista por dia paginada |
+| Treino | 3 cartões de ficha altos com botão largo | lista compacta com botão de play; histórico 3 itens; evolução 4 itens (+ "ver todos") |
+| Estudos | segmentos semana/mês, todas as matérias, 10 sessões | só semana, 5 sessões (+ "mostrar mais") |
+| Leitura | 4 abas de estado + lista filtrada | lista única ordenada por estado |
+
+A barra inferior passou a ser **flutuante**: descolada das bordas, totalmente arredondada e translúcida com desfoque do conteúdo por trás (`backdrop-blur`), com a aba ativa em pílula preenchida.
+
+Componentes que ficaram sem uso foram removidos: `goal-card`, `progress-ring`, `page-title`, `category-breakdown`.
+
 ## Decisões tomadas ao construir o protótipo
 
 - **Stack**: Next.js 16 (App Router, Cache Components) + Tailwind 4 + shadcn/ui (base Radix) + zustand + date-fns. Sem biblioteca de gráficos: anéis, barras e sparkline são SVG/CSS próprios.
 - **Os componentes do shadcn foram ajustados** para alvo de toque de 44 px (botão, input, select), porque o padrão deles é 32 px.
 - **Gate de carregamento dentro de cada tela** (`withStoreGate`), e não no layout: com Cache Components o Next precisa renderizar a página no servidor para validar navegação instantânea.
+- **Aviso de carregamento travado**: se o JavaScript não roda (o caso real: abrir pelo IP da rede com o dev server bloqueando origens externas), um script embutido avisa em 8 s em vez de deixar o esqueleto girando. Ver `boot-check.tsx` e `allowedDevOrigins` no `next.config.ts`.
 - **Desarme após finalizar o cronômetro**: os botões de matéria ficam inativos por 700 ms depois de finalizar, porque o segundo toque de um duplo toque caía numa matéria e iniciava outro cronômetro sem querer (bug encontrado nos testes de fluxo).
 - **Confirmações idempotentes**: o sheet de lançamento e a proposta do assistente têm trava contra toque duplo.
 - **Cronômetro**: sessões < 1 min são descartadas; a sessão pertence ao dia em que começou.

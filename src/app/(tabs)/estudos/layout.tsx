@@ -1,12 +1,11 @@
 import type { ReactNode } from "react";
-import { PageTitle } from "@/components/shared/page-title";
 import { StudyTabs } from "@/components/studies/study-tabs";
 
 export default function StudiesLayout({ children }: { children: ReactNode }) {
   return (
     <div>
-      <PageTitle title="Estudos" />
-      <div className="px-4 pb-4">
+      <div className="space-y-4 px-4 pt-1 pb-5">
+        <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">Estudos</h1>
         <StudyTabs />
       </div>
       {children}

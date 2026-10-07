@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { DEMO_STORAGE_KEY } from "@/lib/constants";
 import { dateKeyFromInstant, todayKey, type DateKey } from "@/lib/dates";
+import { greenHue } from "@/lib/hues";
 import { uid } from "@/lib/id";
 import { upsertGoal } from "@/domain/goals";
 import { buildDraft, finalizeDraft } from "@/domain/workouts";
@@ -230,7 +231,7 @@ export const useTarsStore = create<TarsState>()(
         set((s) => ({
           subjects: [
             ...s.subjects,
-            { id, name: name.trim(), objective, hue: (s.subjects.length * 67 + 30) % 360 },
+            { id, name: name.trim(), objective, hue: greenHue(s.subjects.length) },
           ],
         }));
         return id;

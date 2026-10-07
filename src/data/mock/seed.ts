@@ -41,16 +41,16 @@ export interface SeedData {
 /* Catálogos iniciais em PT-BR (editáveis no app real). */
 
 export const CATEGORIES: Category[] = [
-  { id: "cat-food", name: "Alimentação", type: "expense", icon: "utensils", hue: 65 },
-  { id: "cat-transport", name: "Transporte", type: "expense", icon: "car", hue: 250 },
-  { id: "cat-home", name: "Moradia", type: "expense", icon: "home", hue: 35 },
-  { id: "cat-health", name: "Saúde", type: "expense", icon: "heart", hue: 15 },
-  { id: "cat-fun", name: "Lazer", type: "expense", icon: "fun", hue: 320 },
-  { id: "cat-shop", name: "Compras", type: "expense", icon: "bag", hue: 200 },
-  { id: "cat-edu", name: "Educação", type: "expense", icon: "school", hue: 285 },
-  { id: "cat-other", name: "Outros", type: "expense", icon: "dots", hue: 240 },
+  { id: "cat-food", name: "Alimentação", type: "expense", icon: "utensils", hue: 100 },
+  { id: "cat-transport", name: "Transporte", type: "expense", icon: "car", hue: 178 },
+  { id: "cat-home", name: "Moradia", type: "expense", icon: "home", hue: 140 },
+  { id: "cat-health", name: "Saúde", type: "expense", icon: "heart", hue: 118 },
+  { id: "cat-fun", name: "Lazer", type: "expense", icon: "fun", hue: 162 },
+  { id: "cat-shop", name: "Compras", type: "expense", icon: "bag", hue: 186 },
+  { id: "cat-edu", name: "Educação", type: "expense", icon: "school", hue: 128 },
+  { id: "cat-other", name: "Outros", type: "expense", icon: "dots", hue: 150 },
   { id: "cat-salary", name: "Salário", type: "income", icon: "wage", hue: 150 },
-  { id: "cat-income-other", name: "Outros", type: "income", icon: "plus", hue: 180 },
+  { id: "cat-income-other", name: "Outros", type: "income", icon: "plus", hue: 170 },
 ];
 
 export const EXERCISES: Exercise[] = [
@@ -112,10 +112,10 @@ export const PLANS: WorkoutPlan[] = [
 ];
 
 export const SUBJECTS: Subject[] = [
-  { id: "sub-sql", name: "SQL", objective: "Banco do Brasil", hue: 250 },
-  { id: "sub-pt", name: "Português", objective: "Banco do Brasil", hue: 150 },
-  { id: "sub-redes", name: "Redes", objective: "Banco do Brasil", hue: 35 },
-  { id: "sub-seg", name: "Segurança", objective: "Banco do Brasil", hue: 330 },
+  { id: "sub-sql", name: "SQL", objective: "Banco do Brasil", hue: 175 },
+  { id: "sub-pt", name: "Português", objective: "Banco do Brasil", hue: 120 },
+  { id: "sub-redes", name: "Redes", objective: "Banco do Brasil", hue: 100 },
+  { id: "sub-seg", name: "Segurança", objective: "Banco do Brasil", hue: 150 },
 ];
 
 /** Pesos de partida por exercício (kg). */

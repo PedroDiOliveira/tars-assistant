@@ -18,11 +18,11 @@ const SCRIPT = `
     done = true;
     var box = document.createElement("div");
     box.setAttribute("role", "alert");
-    box.style.cssText = "position:fixed;inset:auto 0 0 0;z-index:2147483647;margin:12px;padding:16px;border-radius:16px;background:#1f1d2b;color:#fff;font:500 14px/1.5 system-ui,sans-serif;box-shadow:0 8px 32px rgba(0,0,0,.3)";
+    box.style.cssText = "position:fixed;inset:auto 0 0 0;z-index:2147483647;margin:12px;padding:16px;border-radius:16px;background:#084734;color:#fff;font:500 14px/1.5 system-ui,sans-serif;box-shadow:0 8px 32px rgba(0,0,0,.3)";
     box.innerHTML =
       '<p style="margin:0 0 8px;font-weight:700">O app não terminou de carregar</p>' +
       '<p style="margin:0 0 12px;opacity:.85">Se você abriu pelo IP da rede, pare o servidor e rode <code style="background:rgba(255,255,255,.14);padding:1px 5px;border-radius:5px">npm run dev</code> de novo para liberar este endereço.</p>' +
-      '<button type="button" style="min-height:44px;width:100%;border:0;border-radius:12px;background:#6d5cf5;color:#fff;font:600 15px system-ui,sans-serif">Recarregar</button>';
+      '<button type="button" style="min-height:44px;width:100%;border:0;border-radius:12px;background:#cef17b;color:#084734;font:600 15px system-ui,sans-serif">Recarregar</button>';
     box.querySelector("button").addEventListener("click", function () { location.reload(); });
     document.body.appendChild(box);
   }

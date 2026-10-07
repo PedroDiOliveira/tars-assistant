@@ -30,8 +30,8 @@ export const viewport: Viewport = {
   // ocupa a tela toda no iPhone; as áreas seguras são tratadas com env(safe-area-inset-*)
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f6f6fa" },
-    { media: "(prefers-color-scheme: dark)", color: "#14151b" },
+    { media: "(prefers-color-scheme: light)", color: "#f3f7ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a120e" },
   ],
 };
 

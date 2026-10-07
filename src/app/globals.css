@@ -5,8 +5,9 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Todas as cores do app vivem aqui, em tokens. Para trocar a identidade visual, edite
- * só as variáveis de :root e .dark (cor primária e uma cor por módulo).
+ * PALETA
+ * Emerald Pine #084734 · Lime Glow #CEF17B · Green Tea #CDEDB3
+ * Tudo no app sai daqui. Para mudar a identidade visual, mexa só nestas variáveis.
  */
 @theme inline {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -41,15 +42,10 @@
   --color-danger-soft: var(--danger-soft);
   --color-danger-ink: var(--danger-ink);
 
-  /* cor do módulo corrente: defina data-module="finance|workout|study|reading" num ancestral */
+  /* cor do módulo corrente: data-module="finance|workout|study|reading" num ancestral */
   --color-m: var(--m);
   --color-m-soft: var(--m-soft);
   --color-m-ink: var(--m-ink);
-
-  --color-finance: var(--finance);
-  --color-workout: var(--workout);
-  --color-study: var(--study);
-  --color-reading: var(--reading);
 
   --radius-sm: calc(var(--radius) * 0.5);
   --radius-md: calc(var(--radius) * 0.75);
@@ -61,93 +57,98 @@
 }
 
 :root {
-  --radius: 0.875rem;
+  --radius: 1rem;
 
-  --background: oklch(0.972 0.005 270);
-  --foreground: oklch(0.22 0.02 270);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.02 270);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.02 270);
+  --pine: #084734;
+  --lime: #cef17b;
+  --tea: #cdedb3;
 
-  --primary: oklch(0.52 0.21 277);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.945 0.012 275);
-  --secondary-foreground: oklch(0.3 0.06 277);
-  --muted: oklch(0.953 0.006 270);
-  --muted-foreground: oklch(0.5 0.02 270);
-  --accent: oklch(0.94 0.03 277);
-  --accent-foreground: oklch(0.38 0.14 277);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.006 270);
-  --input: oklch(0.89 0.008 270);
-  --ring: oklch(0.6 0.15 277);
+  --background: #f3f7ef;
+  --foreground: #0a2018;
+  --card: #ffffff;
+  --card-foreground: #0a2018;
+  --popover: #ffffff;
+  --popover-foreground: #0a2018;
 
-  --success: oklch(0.65 0.16 160);
-  --success-soft: oklch(0.96 0.035 160);
-  --success-ink: oklch(0.42 0.1 160);
-  --warning: oklch(0.78 0.15 75);
-  --warning-soft: oklch(0.965 0.045 85);
-  --warning-ink: oklch(0.47 0.11 65);
-  --danger-soft: oklch(0.96 0.03 25);
-  --danger-ink: oklch(0.5 0.19 27);
+  --primary: #084734;
+  --primary-foreground: #cef17b;
+  --secondary: #e4f0d8;
+  --secondary-foreground: #0a3528;
+  --muted: #eaf1e3;
+  --muted-foreground: #5c6f62;
+  --accent: #cdedb3;
+  --accent-foreground: #0a3528;
+  --destructive: #b4341f;
+  --border: #dde7d3;
+  --input: #cfdcc3;
+  --ring: #0b6b4f;
 
-  --finance: oklch(0.65 0.16 160);
-  --finance-soft: oklch(0.96 0.035 160);
-  --finance-ink: oklch(0.42 0.1 160);
-  --workout: oklch(0.7 0.18 50);
-  --workout-soft: oklch(0.965 0.035 60);
-  --workout-ink: oklch(0.48 0.13 45);
-  --study: oklch(0.65 0.15 235);
-  --study-soft: oklch(0.96 0.03 235);
-  --study-ink: oklch(0.42 0.12 240);
-  --reading: oklch(0.66 0.2 355);
-  --reading-soft: oklch(0.965 0.03 355);
-  --reading-ink: oklch(0.46 0.16 355);
+  --success: #0f7a52;
+  --success-soft: #dcf0e3;
+  --success-ink: #075c3c;
+  --warning: #b07c0a;
+  --warning-soft: #f7edcd;
+  --warning-ink: #6f4e05;
+  --danger-soft: #f8e2dd;
+  --danger-ink: #93301d;
+
+  /* Módulos: variações dentro da mesma família verde, não cores avulsas. */
+  --finance: #0b6b4f;
+  --finance-soft: #d9ece2;
+  --finance-ink: #084734;
+  --workout: #86bb2e;
+  --workout-soft: #e9f6d2;
+  --workout-ink: #4e6e13;
+  --study: #0e7c6b;
+  --study-soft: #d6eeea;
+  --study-ink: #0a5347;
+  --reading: #4f8d5b;
+  --reading-soft: #deecdf;
+  --reading-ink: #2d5b37;
 }
 
 .dark {
-  --background: oklch(0.165 0.012 270);
-  --foreground: oklch(0.96 0.005 270);
-  --card: oklch(0.215 0.014 270);
-  --card-foreground: oklch(0.96 0.005 270);
-  --popover: oklch(0.235 0.015 270);
-  --popover-foreground: oklch(0.96 0.005 270);
+  --background: #0a120e;
+  --foreground: #e9f2e3;
+  --card: #122019;
+  --card-foreground: #e9f2e3;
+  --popover: #16241d;
+  --popover-foreground: #e9f2e3;
 
-  --primary: oklch(0.7 0.16 277);
-  --primary-foreground: oklch(0.15 0.02 277);
-  --secondary: oklch(0.28 0.02 275);
-  --secondary-foreground: oklch(0.95 0.01 275);
-  --muted: oklch(0.265 0.012 270);
-  --muted-foreground: oklch(0.72 0.015 270);
-  --accent: oklch(0.3 0.05 277);
-  --accent-foreground: oklch(0.9 0.05 277);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.6 0.12 277);
+  --primary: #cef17b;
+  --primary-foreground: #082019;
+  --secondary: #1b2d23;
+  --secondary-foreground: #dcebcf;
+  --muted: #17261e;
+  --muted-foreground: #9cb0a2;
+  --accent: #1d3528;
+  --accent-foreground: #cef17b;
+  --destructive: #e3765f;
+  --border: #ffffff1a;
+  --input: #ffffff26;
+  --ring: #cef17b;
 
-  --success: oklch(0.75 0.16 160);
-  --success-soft: oklch(0.28 0.05 160);
-  --success-ink: oklch(0.85 0.12 160);
-  --warning: oklch(0.8 0.15 80);
-  --warning-soft: oklch(0.3 0.05 80);
-  --warning-ink: oklch(0.86 0.11 85);
-  --danger-soft: oklch(0.29 0.06 25);
-  --danger-ink: oklch(0.82 0.12 25);
+  --success: #6fd49b;
+  --success-soft: #123123;
+  --success-ink: #8fe0b0;
+  --warning: #e4c76a;
+  --warning-soft: #2e2a16;
+  --warning-ink: #ecd68c;
+  --danger-soft: #35201c;
+  --danger-ink: #f0a494;
 
-  --finance: oklch(0.75 0.16 160);
-  --finance-soft: oklch(0.28 0.05 160);
-  --finance-ink: oklch(0.85 0.12 160);
-  --workout: oklch(0.78 0.15 55);
-  --workout-soft: oklch(0.3 0.05 55);
-  --workout-ink: oklch(0.86 0.1 60);
-  --study: oklch(0.74 0.13 235);
-  --study-soft: oklch(0.29 0.05 240);
-  --study-ink: oklch(0.85 0.09 235);
-  --reading: oklch(0.74 0.17 355);
-  --reading-soft: oklch(0.3 0.06 355);
-  --reading-ink: oklch(0.86 0.1 355);
+  --finance: #58cf9a;
+  --finance-soft: #102b20;
+  --finance-ink: #86e2b6;
+  --workout: #cef17b;
+  --workout-soft: #263316;
+  --workout-ink: #d9f498;
+  --study: #4fd3bd;
+  --study-soft: #0e2d29;
+  --study-ink: #85e4d4;
+  --reading: #8dd49a;
+  --reading-soft: #152c1b;
+  --reading-ink: #abe3b4;
 }
 
 /* Seleciona a cor do módulo para todos os filhos (bg-m, text-m-ink, stroke-m...). */
