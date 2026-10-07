@@ -159,7 +159,9 @@ export function studyWeekSummary(data: DataSnapshot, today: DateKey): StudyWeekS
     period,
     data.subjects.map((s) => s.id),
   );
-  const bySubject: SubjectWeek[] = data.subjects.map((subject) => {
+  // Matéria arquivada sai da lista, a menos que tenha tempo registrado nesta semana (o total precisa fechar).
+  const visibleSubjects = data.subjects.filter((s) => !s.archived || (subjectSeconds.get(s.id) ?? 0) > 0);
+  const bySubject: SubjectWeek[] = visibleSubjects.map((subject) => {
     const subjectTarget = currentWeekTarget(data.goals, "study_minutes", subject.id, today);
     const subjectSecs = subjectSeconds.get(subject.id) ?? 0;
     return {

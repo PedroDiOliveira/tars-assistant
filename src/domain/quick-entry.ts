@@ -2,6 +2,11 @@ import { addDays, monthOf, type DateKey } from "@/lib/dates";
 import type { Category, TxType } from "./types";
 
 export interface TxProposal {
+  /**
+   * Identificador estável da proposta. Ao confirmar, vira o id do lançamento: confirmar duas vezes a mesma proposta
+   * (toque duplo, nova tentativa) não duplica nada. Ausente nas propostas locais do modo demo.
+   */
+  id?: string;
   type: TxType;
   amountCents: number;
   description: string;
@@ -46,9 +51,10 @@ function resolveCategory(text: string, type: TxType, categories: Category[]): st
   const hit = CATEGORY_KEYWORDS.find(
     (k) => k.type === type && k.words.some((w) => new RegExp(`\\b${w}\\b`).test(norm)),
   );
-  const byName = hit ? categories.find((c) => c.type === type && c.name === hit.name) : undefined;
-  const fallback = categories.find((c) => c.type === type && c.name === "Outros");
-  return (byName ?? fallback ?? categories.find((c) => c.type === type))?.id ?? "";
+  const usable = categories.filter((c) => !c.archived);
+  const byName = hit ? usable.find((c) => c.type === type && c.name === hit.name) : undefined;
+  const fallback = usable.find((c) => c.type === type && c.name === "Outros");
+  return (byName ?? fallback ?? usable.find((c) => c.type === type))?.id ?? "";
 }
 
 /** Acha valores monetários: "42", "42,50", "1.234,56", "R$ 3500". */

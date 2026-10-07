@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
@@ -13,6 +12,9 @@ import type { StudySession } from "@/domain/types";
 import { useActions, useData, useToday } from "@/data";
 import { addDays, isValidDateKey, type DateKey } from "@/lib/dates";
 import { formatDurationSeconds } from "@/lib/format";
+import { notify } from "@/components/shared/notify";
+import { activeOnly } from "@/domain/catalog";
+import { MAX_SESSION_SECONDS } from "@/domain/studies";
 
 interface ManualSessionSheetProps {
   open: boolean;
@@ -42,10 +44,12 @@ export function ManualSessionSheet({ open, onOpenChange, session }: ManualSessio
 }
 
 function ManualSessionForm({ session, onDone }: { session: StudySession | null; onDone: () => void }) {
-  const { subjects } = useData();
+  const allSubjects = useData().subjects;
   const today = useToday();
   const { addStudySession, updateStudySession, deleteStudySession } = useActions();
 
+  // matérias arquivadas saem da escolha, exceto a da sessão que está sendo editada
+  const subjects = activeOnly(allSubjects, [session?.subjectId]);
   const [subjectId, setSubjectId] = useState<string>(session?.subjectId ?? subjects[0]?.id ?? "");
   const [date, setDate] = useState<DateKey>(session?.occurredOn ?? today);
   const initialMinutes = session ? Math.round(session.durationSeconds / 60) : 0;
@@ -56,7 +60,7 @@ function ManualSessionForm({ session, onDone }: { session: StudySession | null; 
   const submitted = useRef(false);
 
   const totalMinutes = (Number(hours) || 0) * 60 + (Number(minutes) || 0);
-  const tooLong = totalMinutes > 24 * 60;
+  const tooLong = totalMinutes * 60 > MAX_SESSION_SECONDS;
   const valid = subjectId !== "" && totalMinutes > 0 && !tooLong && isValidDateKey(date);
 
   function setTotal(total: number) {
@@ -64,7 +68,7 @@ function ManualSessionForm({ session, onDone }: { session: StudySession | null; 
     setMinutes(total % 60 ? String(total % 60) : "");
   }
 
-  function save() {
+  async function save() {
     if (submitted.current || !valid) return;
     submitted.current = true;
     const payload = {
@@ -73,12 +77,15 @@ function ManualSessionForm({ session, onDone }: { session: StudySession | null; 
       durationSeconds: totalMinutes * 60,
       notes: notes.trim() || undefined,
     };
-    if (session) {
-      updateStudySession(session.id, payload);
-      toast.success("Sessão atualizada");
-    } else {
-      addStudySession(payload);
-      toast.success(`${formatDurationSeconds(payload.durationSeconds)} de estudo registrados`);
+    const result = session
+      ? await updateStudySession(session.id, payload)
+      : await addStudySession(payload);
+    const message = session
+      ? "Sessão atualizada"
+      : `${formatDurationSeconds(payload.durationSeconds)} de estudo registrados`;
+    if (!notify(result, message)) {
+      submitted.current = false;
+      return;
     }
     onDone();
   }
@@ -190,10 +197,9 @@ function ManualSessionForm({ session, onDone }: { session: StudySession | null; 
         description="Os totais da semana e da matéria serão recalculados."
         confirmLabel="Excluir"
         destructive
-        onConfirm={() => {
-          if (session) deleteStudySession(session.id);
-          toast.success("Sessão excluída");
-          onDone();
+        onConfirm={async () => {
+          if (!session) return;
+          if (notify(await deleteStudySession(session.id), "Sessão excluída")) onDone();
         }}
       />
     </div>

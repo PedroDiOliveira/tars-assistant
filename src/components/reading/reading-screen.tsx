@@ -11,7 +11,7 @@ import { ProgressBar } from "@/components/shared/progress-bar";
 import { Surface } from "@/components/shared/surface";
 import { bookProgress } from "@/domain/reading";
 import { readingWeekSummary } from "@/domain/summary";
-import type { BookStatus } from "@/domain/types";
+import type { Book, BookStatus, ReadingSession } from "@/domain/types";
 import { useData, useToday } from "@/data";
 import { WEEK_LABELS } from "@/lib/constants";
 import { pluralize } from "@/lib/format";
@@ -35,6 +35,8 @@ function ReadingScreenContent() {
   const [sessionOpen, setSessionOpen] = useState(false);
   const [sessionBook, setSessionBook] = useState<string | null>(null);
   const [bookOpen, setBookOpen] = useState(false);
+  const [bookEdit, setBookEdit] = useState<Book | null>(null);
+  const [sessionEdit, setSessionEdit] = useState<ReadingSession | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [goalOpen, setGoalOpen] = useState(false);
@@ -48,6 +50,7 @@ function ReadingScreenContent() {
   const remaining = week.target ? Math.max(0, week.target - week.pages) : 0;
 
   function openSession(bookId: string | null) {
+    setSessionEdit(null);
     setSessionBook(bookId);
     setSessionOpen(true);
   }
@@ -138,7 +141,14 @@ function ReadingScreenContent() {
       <section className="space-y-2">
         <div className="flex items-center justify-between px-1">
           <h2 className="text-base font-semibold">Meus livros</h2>
-          <Button variant="ghost" size="sm" onClick={() => setBookOpen(true)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setBookEdit(null);
+              setBookOpen(true);
+            }}
+          >
             <Plus aria-hidden /> Livro
           </Button>
         </div>
@@ -169,9 +179,23 @@ function ReadingScreenContent() {
         </Surface>
       </section>
 
-      <ReadingSessionSheet open={sessionOpen} onOpenChange={setSessionOpen} bookId={sessionBook} />
-      <BookSheet open={bookOpen} onOpenChange={setBookOpen} />
-      <BookDetailSheet open={detailOpen} onOpenChange={setDetailOpen} bookId={detailId} />
+      <ReadingSessionSheet open={sessionOpen} onOpenChange={setSessionOpen} bookId={sessionBook} session={sessionEdit} />
+      <BookSheet open={bookOpen} onOpenChange={setBookOpen} book={bookEdit} />
+      <BookDetailSheet
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        bookId={detailId}
+        onEditBook={(book) => {
+          setDetailOpen(false);
+          setBookEdit(book);
+          setBookOpen(true);
+        }}
+        onEditSession={(session) => {
+          setDetailOpen(false);
+          setSessionEdit(session);
+          setSessionOpen(true);
+        }}
+      />
       <GoalSheet
         open={goalOpen}
         onOpenChange={setGoalOpen}

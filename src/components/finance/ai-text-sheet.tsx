@@ -5,8 +5,8 @@ import { Info, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetFooter } from "@/components/shared/sheet";
-import { parseQuickEntry, type TxProposal } from "@/domain/quick-entry";
-import { useData, useToday } from "@/data";
+import type { TxProposal } from "@/domain/quick-entry";
+import { assistant, useAccount } from "@/data";
 
 const EXAMPLES = ["Gastei 42 reais no Outback ontem", "Recebi 3500 de salário hoje", "Paguei 18,50 de uber"];
 
@@ -15,9 +15,11 @@ interface AiTextSheetProps {
   onOpenChange: (open: boolean) => void;
   /** chamada com a proposta interpretada; o salvamento só acontece na tela de confirmação */
   onProposal: (proposal: TxProposal) => void;
+  /** abre o formulário manual (caminho sempre disponível quando a IA falha) */
+  onManual: () => void;
 }
 
-export function AiTextSheet({ open, onOpenChange, onProposal }: AiTextSheetProps) {
+export function AiTextSheet({ open, onOpenChange, onProposal, onManual }: AiTextSheetProps) {
   return (
     <Sheet
       open={open}
@@ -31,25 +33,37 @@ export function AiTextSheet({ open, onOpenChange, onProposal }: AiTextSheetProps
           onOpenChange(false);
           onProposal(proposal);
         }}
+        onManual={() => {
+          onOpenChange(false);
+          onManual();
+        }}
       />
     </Sheet>
   );
 }
 
-function AiTextForm({ onProposal }: { onProposal: (proposal: TxProposal) => void }) {
-  const data = useData();
-  const today = useToday();
+function AiTextForm({ onProposal, onManual }: { onProposal: (proposal: TxProposal) => void; onManual: () => void }) {
+  const account = useAccount();
   const [text, setText] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  function interpret() {
-    const result = parseQuickEntry(text, today, data.categories);
-    if (result.kind === "proposal") {
-      onProposal(result.proposal);
-    } else if (result.kind === "ask") {
-      setMessage(result.question);
+  async function interpret() {
+    if (busy || text.trim() === "") return;
+    setBusy(true);
+    setMessage(null);
+    setFailed(false);
+    const result = await assistant.ask(text);
+    setBusy(false);
+    if (!result.ok) {
+      setFailed(true);
+      setMessage(result.error);
+    } else if (result.value.proposal) {
+      onProposal(result.value.proposal);
     } else {
-      setMessage("Não entendi como um lançamento. Tente algo como “Gastei 42 reais no Outback ontem”.");
+      // o assistente pediu algo que faltou (ex.: o valor) ou não viu um lançamento na frase
+      setMessage(result.value.text);
     }
   }
 
@@ -58,8 +72,9 @@ function AiTextForm({ onProposal }: { onProposal: (proposal: TxProposal) => void
       <div className="flex gap-2 rounded-xl bg-warning-soft p-3 text-sm text-warning-ink">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
         <p>
-          Simulação local: nada sai do seu aparelho. Na versão real, a IA propõe e você sempre
-          confirma antes de salvar.
+          {account.isLive
+            ? `Sua frase é enviada a ${account.aiProvider ?? "um provedor de IA"} para ser interpretada. Ela só propõe: você sempre confirma antes de salvar.`
+            : "Simulação local: nada sai do seu aparelho. Na versão real, a IA propõe e você sempre confirma antes de salvar."}
         </p>
       </div>
 
@@ -99,9 +114,14 @@ function AiTextForm({ onProposal }: { onProposal: (proposal: TxProposal) => void
       </div>
 
       <SheetFooter>
-        <Button size="lg" disabled={text.trim() === ""} onClick={interpret}>
-          <Sparkles aria-hidden /> Interpretar
+        <Button size="lg" disabled={text.trim() === "" || busy} onClick={() => void interpret()}>
+          <Sparkles aria-hidden /> {busy ? "Interpretando…" : "Interpretar"}
         </Button>
+        {failed ? (
+          <Button size="lg" variant="outline" onClick={onManual}>
+            Preencher manualmente
+          </Button>
+        ) : null}
       </SheetFooter>
     </div>
   );

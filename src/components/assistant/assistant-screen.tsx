@@ -2,19 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import { withStoreGate } from "@/components/layout/store-gate";
-import { toast } from "sonner";
 import { ArrowUp, Info, Sparkles } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SubHeader } from "@/components/layout/sub-header";
 import { TransactionSheet, type TxSheetState } from "@/components/finance/transaction-sheet";
-import { answerQuestion } from "@/domain/assistant";
 import { formatBRL } from "@/domain/money";
-import { parseQuickEntry, type TxProposal } from "@/domain/quick-entry";
-import { useActions, useData, useToday } from "@/data";
+import type { TxProposal } from "@/domain/quick-entry";
+import { acceptAiConsent, assistant, useAccount, useActions, useAiConsent, useData, useToday } from "@/data";
 import { formatDayRelative } from "@/lib/format";
 import { uid } from "@/lib/id";
+import { notify } from "@/components/shared/notify";
+
 
 type ProposalStatus = "pending" | "confirmed" | "cancelled";
 
@@ -24,6 +24,8 @@ interface Message {
   text: string;
   period?: string;
   proposal?: { value: TxProposal; status: ProposalStatus };
+  /** falha ao falar com o assistente: a tela oferece o caminho manual */
+  failed?: boolean;
 }
 
 const SUGGESTIONS = [
@@ -44,6 +46,7 @@ const WELCOME: Message = {
 function AssistantScreenContent() {
   const data = useData();
   const today = useToday();
+  const account = useAccount();
   const { addTransaction } = useActions();
 
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
@@ -51,7 +54,11 @@ function AssistantScreenContent() {
   const [thinking, setThinking] = useState(false);
   const [txOpen, setTxOpen] = useState(false);
   const [txState, setTxState] = useState<TxSheetState | null>(null);
-  const timeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // null = ainda lendo o aparelho. No demo nada sai do aparelho, então não há o que consentir.
+  const stored = useAiConsent();
+  // Deploy sem provedor de IA configurado: o assistente não existe (o resto do app não depende dele).
+  const unavailable = account.isLive && !account.aiEnabled;
+  const consent = unavailable ? false : account.isLive ? stored : true;
   const endRef = useRef<HTMLDivElement>(null);
   // Propostas já confirmadas: garante um único lançamento por proposta, mesmo com toques repetidos.
   const confirmed = useRef(new Set<string>());
@@ -60,39 +67,24 @@ function AssistantScreenContent() {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, thinking]);
 
-  useEffect(
-    () => () => {
-      if (timeout.current) clearTimeout(timeout.current);
-    },
-    [],
-  );
-
-  function send(raw: string) {
+  async function send(raw: string) {
     const question = raw.trim();
-    if (!question || thinking) return;
+    if (!question || thinking || consent !== true) return;
     setText("");
-    setMessages((m) => [...m, { id: uid("m"), role: "user", text: question }]);
+    setMessages((m) => [...m, { id: uid(), role: "user", text: question }]);
     setThinking(true);
 
-    timeout.current = setTimeout(() => {
-      const entry = parseQuickEntry(question, today, data.categories);
-      let reply: Message;
-      if (entry.kind === "proposal") {
-        reply = {
-          id: uid("m"),
-          role: "assistant",
-          text: "Entendi assim. Confira e confirme para eu salvar — nada foi salvo ainda.",
-          proposal: { value: entry.proposal, status: "pending" },
-        };
-      } else if (entry.kind === "ask") {
-        reply = { id: uid("m"), role: "assistant", text: entry.question };
-      } else {
-        const answer = answerQuestion(question, data, today);
-        reply = { id: uid("m"), role: "assistant", text: answer.text, period: answer.period };
-      }
-      setMessages((m) => [...m, reply]);
-      setThinking(false);
-    }, 450);
+    const result = await assistant.ask(question);
+    setThinking(false);
+    if (!result.ok) {
+      setMessages((m) => [...m, { id: uid(), role: "assistant", text: result.error, failed: true }]);
+      return;
+    }
+    const { text: answer, period, proposal } = result.value;
+    setMessages((m) => [
+      ...m,
+      { id: uid(), role: "assistant", text: answer, period, ...(proposal ? { proposal: { value: proposal, status: "pending" as const } } : {}) },
+    ]);
   }
 
   function setStatus(id: string, status: ProposalStatus) {
@@ -101,13 +93,14 @@ function AssistantScreenContent() {
     );
   }
 
-  function confirm(message: Message) {
+  async function confirm(message: Message) {
     if (!message.proposal || message.proposal.status !== "pending") return;
     if (confirmed.current.has(message.id)) return;
     confirmed.current.add(message.id);
     const p = message.proposal.value;
-    setStatus(message.id, "confirmed");
-    addTransaction({
+    const result = await addTransaction({
+      // O id da proposta é o do lançamento: confirmar de novo (toque duplo, nova tentativa) nunca duplica.
+      id: p.id ?? message.id,
       type: p.type,
       amountCents: p.amountCents,
       categoryId: p.categoryId,
@@ -115,7 +108,11 @@ function AssistantScreenContent() {
       occurredOn: p.occurredOn,
       source: "ai",
     });
-    toast.success(`${p.type === "income" ? "Receita" : "Despesa"} de ${formatBRL(p.amountCents)} salva`);
+    if (!notify(result, `${p.type === "income" ? "Receita" : "Despesa"} de ${formatBRL(p.amountCents)} salva`)) {
+      confirmed.current.delete(message.id); // não salvou: a proposta continua pendente
+      return;
+    }
+    setStatus(message.id, "confirmed");
   }
 
   function edit(message: Message) {
@@ -137,13 +134,36 @@ function AssistantScreenContent() {
       <SubHeader title="Assistente" backHref="/inicio" />
 
       <div className="flex-1 space-y-3 px-4 pt-2 pb-48">
-        <div className="flex gap-2 rounded-xl bg-warning-soft p-3 text-sm text-warning-ink">
-          <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <p>
-            Modo simulação: as respostas são calculadas no seu aparelho com os dados de demonstração. Na versão
-            real, só o necessário para responder será enviado ao provedor de IA configurado.
-          </p>
-        </div>
+        {account.isLive ? null : (
+          <div className="flex gap-2 rounded-xl bg-warning-soft p-3 text-sm text-warning-ink">
+            <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <p>
+              Modo simulação: as respostas são calculadas no seu aparelho com os dados de demonstração. Na versão
+              real, só o necessário para responder será enviado ao provedor de IA configurado.
+            </p>
+          </div>
+        )}
+
+        {unavailable ? (
+          <div role="status" className="flex gap-2 rounded-xl bg-muted p-4 text-sm">
+            <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <p>O assistente não está configurado neste app. Lançamentos, treinos, estudos e leitura funcionam normalmente pelos formulários.</p>
+          </div>
+        ) : null}
+
+        {account.isLive && !unavailable && consent === false ? (
+          <div role="region" aria-label="Aviso de privacidade" className="space-y-3 rounded-xl bg-warning-soft p-4 text-sm text-warning-ink">
+            <p className="flex items-center gap-2 font-semibold">
+              <Info className="size-4 shrink-0" aria-hidden /> Antes de usar o assistente
+            </p>
+            <p>
+              Suas mensagens e os resumos necessários para respondê-las (totais e nomes de categorias, matérias e livros)
+              serão enviados a {account.aiProvider ?? "um provedor de IA"}. Descrições dos seus lançamentos não são enviadas.
+              O uso de IA pode gerar custo. O resto do app funciona sem o assistente.
+            </p>
+            <Button onClick={acceptAiConsent}>Entendi, usar o assistente</Button>
+          </div>
+        ) : null}
 
         {messages.map((m) => (
           <div key={m.id} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
@@ -155,6 +175,17 @@ function AssistantScreenContent() {
             >
               <p className="whitespace-pre-line">{m.text}</p>
               {m.period ? <p className="text-xs text-muted-foreground">Período: {m.period}</p> : null}
+              {m.failed ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setTxState({ mode: "create" });
+                    setTxOpen(true);
+                  }}
+                >
+                  Lançar manualmente
+                </Button>
+              ) : null}
               {m.proposal ? (
                 <ProposalCard
                   proposal={m.proposal.value}
@@ -187,8 +218,9 @@ function AssistantScreenContent() {
               <button
                 key={s}
                 type="button"
-                onClick={() => send(s)}
-                className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border bg-card px-3.5 text-sm transition active:bg-muted"
+                disabled={consent !== true}
+                onClick={() => void send(s)}
+                className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border bg-card px-3.5 text-sm transition active:bg-muted disabled:opacity-50"
               >
                 <Sparkles className="size-3.5 text-primary" aria-hidden />
                 {s}
@@ -199,18 +231,19 @@ function AssistantScreenContent() {
             className="flex gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              send(text);
+              void send(text);
             }}
           >
             <Input
               value={text}
               maxLength={200}
-              placeholder="Pergunte ou descreva um gasto"
+              placeholder={unavailable ? "Assistente não configurado" : consent === false ? "Aceite o aviso para usar o assistente" : "Pergunte ou descreva um gasto"}
+              disabled={consent !== true}
               aria-label="Mensagem para o assistente"
               onChange={(e) => setText(e.target.value)}
               className="rounded-full px-4"
             />
-            <Button type="submit" size="icon-lg" className="rounded-full" disabled={text.trim() === "" || thinking} aria-label="Enviar">
+            <Button type="submit" size="icon-lg" className="rounded-full" disabled={text.trim() === "" || thinking || consent !== true} aria-label="Enviar">
               <ArrowUp aria-hidden />
             </Button>
           </form>

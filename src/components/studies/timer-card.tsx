@@ -11,6 +11,7 @@ import { isTimerRunning, timerElapsedSeconds } from "@/domain/studies";
 import { useActions, useData, useNow, useTimer } from "@/data";
 import { formatClock, formatDurationSeconds } from "@/lib/format";
 import { SubjectStarter } from "./subject-starter";
+import { notify } from "@/components/shared/notify";
 
 /** Cronômetro de estudo: sem sessão ativa mostra as matérias; com sessão, o relógio e os controles. */
 export function TimerCard() {
@@ -30,7 +31,7 @@ function IdleTimer() {
         <p className="font-semibold">Estudar agora</p>
         <p className="text-sm text-muted-foreground">Toque numa matéria para iniciar o cronômetro.</p>
       </div>
-      <SubjectStarter onStart={startStudy} armDelayMs={700} />
+      <SubjectStarter onStart={(subjectId) => void startStudy(subjectId).then(notify)} armDelayMs={700} />
     </div>
   );
 }
@@ -47,13 +48,14 @@ function ActiveTimer() {
   const running = isTimerRunning(timer);
   const elapsed = timerElapsedSeconds(timer, now);
 
-  function finish() {
+  async function finish() {
     if (!timer) return;
     const seconds = timerElapsedSeconds(timer, Date.now());
-    const result = finishStudy();
-    if (result === "saved") {
+    const result = await finishStudy();
+    if (!notify(result)) return;
+    if (result.value === "saved") {
       toast.success(`Sessão de ${formatDurationSeconds(seconds)} registrada em ${subject?.name ?? "estudo"}`);
-    } else if (result === "too_short") {
+    } else if (result.value === "too_short") {
       toast.info("Sessão com menos de 1 minuto: não foi registrada.");
     }
   }
@@ -81,7 +83,7 @@ function ActiveTimer() {
         <Button
           size="lg"
           variant="secondary"
-          onClick={running ? pauseStudy : resumeStudy}
+          onClick={() => void (running ? pauseStudy() : resumeStudy()).then(notify)}
         >
           {running ? <Pause aria-hidden /> : <Play aria-hidden />}
           {running ? "Pausar" : "Retomar"}
@@ -101,9 +103,8 @@ function ActiveTimer() {
         description="O tempo contado até agora não será registrado."
         confirmLabel="Descartar"
         destructive
-        onConfirm={() => {
-          discardStudy();
-          toast.info("Sessão descartada");
+        onConfirm={async () => {
+          if (notify(await discardStudy())) toast.info("Sessão descartada");
         }}
       />
     </div>

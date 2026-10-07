@@ -101,12 +101,16 @@ export function groupByDay(txs: Transaction[]): DayGroup[] {
   return [...groups.values()].sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
-/** Categorias ordenadas por uso recente (mais usadas nas últimas transações primeiro). */
+/**
+ * Categorias ATIVAS ordenadas por uso recente (mais usadas nas últimas transações primeiro). `keepId` mantém visível
+ * a categoria já escolhida ao editar um lançamento antigo, mesmo que ela tenha sido arquivada depois.
+ */
 export function categoriesByRecentUse(
   categories: Category[],
   txs: Transaction[],
   type: TxType,
   recentLimit = 60,
+  keepId?: string,
 ): Category[] {
   const recent = [...txs].sort(compareTransactionsDesc).slice(0, recentLimit);
   const score = new Map<string, number>();
@@ -114,6 +118,6 @@ export function categoriesByRecentUse(
     if (t.type === type) score.set(t.categoryId, (score.get(t.categoryId) ?? 0) + 1);
   }
   return categories
-    .filter((c) => c.type === type)
+    .filter((c) => c.type === type && (!c.archived || c.id === keepId))
     .sort((a, b) => (score.get(b.id) ?? 0) - (score.get(a.id) ?? 0));
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/shared/segmented";
@@ -12,6 +11,7 @@ import type { GoalKind } from "@/domain/types";
 import { useActions, useToday } from "@/data";
 import { addDays, addMonths, monthOf, monthStart, weekStart } from "@/lib/dates";
 import { formatMinutes } from "@/lib/format";
+import { notify } from "@/components/shared/notify";
 
 export interface GoalTarget {
   kind: GoalKind;
@@ -61,14 +61,14 @@ function GoalForm({ target, onDone }: { target: GoalTarget; onDone: () => void }
   const currentStart = monthly ? monthStart(monthOf(today)) : weekStart(today);
   const nextStart = monthly ? monthStart(addMonths(monthOf(today), 1)) : addDays(weekStart(today), 7);
 
-  function save(nextValue: number) {
-    setGoal({
+  async function save(nextValue: number) {
+    const result = await setGoal({
       kind: target.kind,
       scopeId: target.scopeId,
       validFrom: from === "now" ? currentStart : nextStart,
       target: nextValue,
     });
-    toast.success(nextValue > 0 ? "Meta atualizada" : "Meta removida");
+    if (!notify(result, nextValue > 0 ? "Meta atualizada" : "Meta removida")) return;
     onDone();
   }
 

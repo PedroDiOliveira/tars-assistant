@@ -12,6 +12,8 @@ export interface Category {
   icon: string;
   /** matiz (0-360) usado para colorir o ponto/ícone da categoria */
   hue: number;
+  /** arquivado: some das listas de escolha, mas continua dando nome ao histórico que já o usa */
+  archived?: boolean;
 }
 
 export interface Transaction {
@@ -61,6 +63,8 @@ export interface Exercise {
   muscleGroup: string;
   /** peso corporal tem carga externa 0 e não entra no cálculo de volume */
   loadType: "external" | "bodyweight";
+  /** arquivado: some das listas de escolha, mas continua dando nome ao histórico que já o usa */
+  archived?: boolean;
 }
 
 export interface PlanExercise {
@@ -76,6 +80,8 @@ export interface WorkoutPlan {
   name: string;
   notes?: string;
   exercises: PlanExercise[];
+  /** arquivado: some das listas de escolha, mas continua dando nome ao histórico que já o usa */
+  archived?: boolean;
 }
 
 export interface SetLog {
@@ -98,7 +104,8 @@ export interface SessionExercise {
 
 export interface WorkoutSession {
   id: string;
-  planId: string;
+  /** null quando a ficha foi apagada depois: a sessão sobrevive pelos snapshots */
+  planId: string | null;
   nameSnapshot: string;
   startedAt: number;
   finishedAt: number;
@@ -109,6 +116,12 @@ export interface WorkoutSession {
 
 /** Treino em andamento: vive só no aparelho até ser finalizado. */
 export interface WorkoutDraft {
+  /**
+   * Vira o id da sessão finalizada. É definido ao iniciar o treino, e não ao finalizar, para que
+   * tocar duas vezes em "Finalizar" (ou tentar de novo depois de uma falha de rede) reenvie a MESMA
+   * sessão em vez de criar outra.
+   */
+  id: string;
   planId: string;
   nameSnapshot: string;
   startedAt: number;
@@ -123,6 +136,8 @@ export interface Subject {
   name: string;
   objective?: string;
   hue: number;
+  /** arquivado: some das listas de escolha, mas continua dando nome ao histórico que já o usa */
+  archived?: boolean;
 }
 
 export interface StudySession {

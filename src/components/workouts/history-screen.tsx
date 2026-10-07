@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { withStoreGate } from "@/components/layout/store-gate";
 import Link from "next/link";
-import { toast } from "sonner";
 import { ChevronDown, Dumbbell, Trash2 } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,7 @@ import { sessionDurationMinutes, sessionSetCount, sessionVolume, sortSessionsDes
 import { useActions, useData, useToday } from "@/data";
 import { formatDayRelative, formatMinutes } from "@/lib/format";
 import { formatVolume, summarizeSets } from "./format-sets";
+import { notify } from "@/components/shared/notify";
 
 function HistoryScreenContent() {
   const data = useData();
@@ -94,11 +94,11 @@ function HistoryScreenContent() {
         description="A meta da semana e os recordes serão recalculados."
         confirmLabel="Excluir"
         destructive
-        onConfirm={() => {
-          if (toDelete) deleteWorkoutSession(toDelete);
+        onConfirm={async () => {
+          const id = toDelete;
           setToDelete(null);
           setOpenId(null);
-          toast.success("Treino excluído");
+          if (id) notify(await deleteWorkoutSession(id), "Treino excluído");
         }}
       />
     </div>

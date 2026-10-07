@@ -3,6 +3,7 @@
 import { Sheet } from "@/components/shared/sheet";
 import { useActions } from "@/data";
 import { SubjectStarter } from "./subject-starter";
+import { notify } from "@/components/shared/notify";
 
 interface StudyStartSheetProps {
   open: boolean;
@@ -24,7 +25,8 @@ export function StudyStartSheet({ open, onOpenChange, onStarted }: StudyStartShe
     >
       <SubjectStarter
         onStart={(subjectId) => {
-          startStudy(subjectId);
+          // A tela já mostra o cronômetro; se o servidor recusar, o aviso de erro aparece e o estado volta.
+          void startStudy(subjectId).then(notify);
           onOpenChange(false);
           onStarted?.();
         }}

@@ -14,7 +14,7 @@ import { filterTransactions, groupByDay } from "@/domain/finance";
 import { formatBRL, formatBRLCompact, formatSignedBRL } from "@/domain/money";
 import type { TxProposal } from "@/domain/quick-entry";
 import { financeSummary, type CategoryRow } from "@/domain/summary";
-import { useData, useToday } from "@/data";
+import { useAccount, useData, useToday } from "@/data";
 import { addMonths, monthOf, type MonthKey } from "@/lib/dates";
 import { formatDayRelative, formatMonthLabel, formatMonthName } from "@/lib/format";
 import { AiTextSheet } from "./ai-text-sheet";
@@ -28,6 +28,7 @@ const DAYS_STEP = 6;
 
 function FinanceScreenContent() {
   const data = useData();
+  const account = useAccount();
   const today = useToday();
   const thisMonth = monthOf(today);
 
@@ -161,9 +162,12 @@ function FinanceScreenContent() {
         <Button size="lg" onClick={() => openTx({ mode: "create" })}>
           <Plus aria-hidden /> Lançamento
         </Button>
-        <Button size="lg" variant="secondary" onClick={() => setAiOpen(true)}>
-          <Sparkles aria-hidden /> Por texto
-        </Button>
+        {/* Sem provedor de IA configurado o botão some; o lançamento manual continua inteiro. */}
+        {account.aiEnabled ? (
+          <Button size="lg" variant="secondary" onClick={() => setAiOpen(true)}>
+            <Sparkles aria-hidden /> Por texto
+          </Button>
+        ) : null}
       </div>
 
       {/* Categorias */}
@@ -279,6 +283,7 @@ function FinanceScreenContent() {
         open={aiOpen}
         onOpenChange={setAiOpen}
         onProposal={(proposal: TxProposal) => openTx({ mode: "confirm", initial: proposal })}
+        onManual={() => openTx({ mode: "create" })}
       />
       <FiltersSheet
         open={filtersOpen}

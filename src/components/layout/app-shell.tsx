@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { cn } from "cn";
 import { AppHeader } from "./app-header";
+import { OfflineBanner } from "./offline-banner";
 import { BottomNav } from "./bottom-nav";
 
 function Frame({ children, chrome }: { children: ReactNode; chrome: boolean }) {
@@ -10,6 +11,7 @@ function Frame({ children, chrome }: { children: ReactNode; chrome: boolean }) {
     <div className="min-h-dvh bg-muted/40">
       <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col bg-background md:border-x">
         {chrome ? <AppHeader /> : null}
+        <OfflineBanner />
         <main className={cn("flex-1", chrome && "pb-[calc(6rem+env(safe-area-inset-bottom))]")}>
           {children}
         </main>

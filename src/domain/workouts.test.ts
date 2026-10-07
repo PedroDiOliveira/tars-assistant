@@ -71,7 +71,7 @@ describe("rascunho local-first", () => {
         { weightKg: 62.5, reps: 7 },
       ]),
     ];
-    const draft = buildDraft(plan, exercises, history, 0);
+    const draft = buildDraft(plan, exercises, history, 0, "draft-1");
     const sets = draft.exercises[0].sets;
     expect(sets.map((s) => [s.weightKg, s.reps, s.done])).toEqual([
       [60, 10, false],
@@ -81,13 +81,13 @@ describe("rascunho local-first", () => {
   });
 
   it("sem histórico usa o planejado com carga zero", () => {
-    const draft = buildDraft(plan, exercises, [], 0);
+    const draft = buildDraft(plan, exercises, [], 0, "draft-1");
     expect(draft.exercises[0].sets).toHaveLength(3);
     expect(draft.exercises[0].sets[0]).toEqual({ weightKg: 0, reps: 10, done: false });
   });
 
   it("guarda uma cópia dos parâmetros: editar a ficha depois não muda o treino já feito", () => {
-    const draft = buildDraft(plan, exercises, [], 0);
+    const draft = buildDraft(plan, exercises, [], 0, "draft-1");
     const finished = finalizeDraft(
       { ...draft, exercises: draft.exercises.map((e) => ({ ...e, sets: e.sets.map((s) => ({ ...s, done: true })) })) },
       "x",
@@ -103,7 +103,7 @@ describe("rascunho local-first", () => {
   });
 
   it("ao finalizar só grava séries concluídas e omite exercícios vazios", () => {
-    const draft = buildDraft(plan, exercises, [], 0);
+    const draft = buildDraft(plan, exercises, [], 0, "draft-1");
     draft.exercises[0].sets[0] = { weightKg: 50, reps: 10, done: true };
     const done = finalizeDraft(draft, "x", 1, "2026-10-06")!;
     expect(done.exercises).toHaveLength(1);
@@ -111,7 +111,7 @@ describe("rascunho local-first", () => {
   });
 
   it("sem nenhuma série concluída não gera sessão (não conta na meta)", () => {
-    const draft = buildDraft(plan, exercises, [], 0);
+    const draft = buildDraft(plan, exercises, [], 0, "draft-1");
     expect(finalizeDraft(draft, "x", 1, "2026-10-06")).toBeNull();
     expect(draftProgress(draft)).toEqual({ done: 0, total: 5 });
   });

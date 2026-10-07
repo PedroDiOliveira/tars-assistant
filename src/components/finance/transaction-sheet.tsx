@@ -16,6 +16,7 @@ import type { Transaction, TxType } from "@/domain/types";
 import { useActions, useData, useTemplates, useToday } from "@/data";
 import { addDays, isValidDateKey, type DateKey } from "@/lib/dates";
 import { categoryIcon } from "@/lib/icons";
+import { notify } from "@/components/shared/notify";
 
 export type TxDraft = Partial<Omit<Transaction, "id" | "source">>;
 
@@ -66,7 +67,7 @@ function TransactionForm({ state, onDone }: { state: TxSheetState; onDone: () =>
   const [categoryId, setCategoryId] = useState<string>(
     () =>
       seed.categoryId ??
-      categoriesByRecentUse(data.categories, data.transactions, seed.type ?? "expense")[0]?.id ??
+      categoriesByRecentUse(data.categories, data.transactions, seed.type ?? "expense", 60, state.transaction?.categoryId)[0]?.id ??
       "",
   );
   const [description, setDescription] = useState<string>(seed.description ?? "");
@@ -77,8 +78,8 @@ function TransactionForm({ state, onDone }: { state: TxSheetState; onDone: () =>
   const submitted = useRef(false);
 
   const categories = useMemo(
-    () => categoriesByRecentUse(data.categories, data.transactions, type),
-    [data.categories, data.transactions, type],
+    () => categoriesByRecentUse(data.categories, data.transactions, type, 60, state.transaction?.categoryId),
+    [data.categories, data.transactions, type, state.transaction?.categoryId],
   );
   const yesterday = addDays(today, -1);
   const isEdit = state.mode === "edit" && state.transaction;
@@ -87,7 +88,7 @@ function TransactionForm({ state, onDone }: { state: TxSheetState; onDone: () =>
 
   function changeType(next: TxType) {
     setType(next);
-    setCategoryId(categoriesByRecentUse(data.categories, data.transactions, next)[0]?.id ?? "");
+    setCategoryId(categoriesByRecentUse(data.categories, data.transactions, next, 60, state.transaction?.categoryId)[0]?.id ?? "");
   }
 
   function applyTemplate(id: string) {
@@ -99,7 +100,7 @@ function TransactionForm({ state, onDone }: { state: TxSheetState; onDone: () =>
     setDescription(tpl.label);
   }
 
-  function save() {
+  async function save() {
     if (submitted.current || !valid) return;
     submitted.current = true;
     const payload = {
@@ -110,45 +111,51 @@ function TransactionForm({ state, onDone }: { state: TxSheetState; onDone: () =>
       occurredOn: date,
     };
     if (isEdit && state.transaction) {
-      updateTransaction(state.transaction.id, payload);
-      toast.success("Lançamento atualizado");
-    } else {
-      addTransaction({ ...payload, source: state.mode === "confirm" ? "ai" : "manual" });
-      if (saveFavorite) {
-        addTemplate({
-          label: payload.description || categoryName,
-          type,
-          amountCents: cents,
-          categoryId,
-        });
+      if (!notify(await updateTransaction(state.transaction.id, payload), "Lançamento atualizado")) {
+        submitted.current = false;
+        return;
       }
+    } else {
+      const created = await addTransaction({ ...payload, source: state.mode === "confirm" ? "ai" : "manual" });
+      if (!notify(created)) {
+        submitted.current = false;
+        return;
+      }
+      // O lançamento já está salvo; falhar só o atalho não deve desfazê-lo nem travar a tela.
+      const favoriteSaved =
+        saveFavorite &&
+        notify(
+          await addTemplate({
+            label: payload.description || categoryName,
+            type,
+            amountCents: cents,
+            categoryId,
+          }),
+        );
       toast.success(
-        `${type === "income" ? "Receita" : "Despesa"} de ${formatBRL(cents)} salva${saveFavorite ? " e adicionada aos atalhos" : ""}`,
+        `${type === "income" ? "Receita" : "Despesa"} de ${formatBRL(cents)} salva${favoriteSaved ? " e adicionada aos atalhos" : ""}`,
       );
     }
     state.onSaved?.();
     onDone();
   }
 
-  function duplicateToday() {
+  async function duplicateToday() {
     const original = state.transaction;
     if (!original) return;
-    addTransaction({
+    const result = await addTransaction({
       type: original.type,
       amountCents: original.amountCents,
       categoryId: original.categoryId,
       description: original.description,
       occurredOn: today,
     });
-    toast.success("Lançamento repetido para hoje");
-    onDone();
+    if (notify(result, "Lançamento repetido para hoje")) onDone();
   }
 
-  function remove() {
+  async function remove() {
     if (!state.transaction) return;
-    deleteTransaction(state.transaction.id);
-    toast.success("Lançamento excluído");
-    onDone();
+    if (notify(await deleteTransaction(state.transaction.id), "Lançamento excluído")) onDone();
   }
 
   return (

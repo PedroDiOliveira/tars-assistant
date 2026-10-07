@@ -21,6 +21,7 @@ import { formatClock, pluralize } from "@/lib/format";
 import { summarizeSets } from "./format-sets";
 import { NumberField } from "./number-field";
 import { RestTimer, type RestState } from "./rest-timer";
+import { notify } from "@/components/shared/notify";
 
 function SessionScreenContent() {
   const draft = useDraft();
@@ -76,9 +77,11 @@ function ActiveSession() {
     }
   }
 
-  function finish() {
-    const result = finishWorkout();
-    if (result === "saved") {
+  async function finish() {
+    const result = await finishWorkout();
+    // Se falhar, o treino continua salvo no aparelho e dá para tentar de novo.
+    if (!notify(result)) return;
+    if (result.value === "saved") {
       const count = week.done + 1;
       toast.success(
         week.target
@@ -86,7 +89,7 @@ function ActiveSession() {
           : "Treino concluído",
       );
       router.push("/treino");
-    } else if (result === "empty") {
+    } else if (result.value === "empty") {
       toast.error("Conclua ao menos uma série para salvar o treino.");
     }
   }

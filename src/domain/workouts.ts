@@ -171,6 +171,7 @@ export function buildDraft(
   exercises: Exercise[],
   sessions: WorkoutSession[],
   startedAt: number,
+  id: string,
 ): WorkoutDraft {
   const byId = new Map(exercises.map((e) => [e.id, e]));
   const sessionExercises: SessionExercise[] = plan.exercises.map((pe) => {
@@ -195,7 +196,45 @@ export function buildDraft(
       sets,
     };
   });
-  return { planId: plan.id, nameSnapshot: plan.name, startedAt, exercises: sessionExercises };
+  return { id, planId: plan.id, nameSnapshot: plan.name, startedAt, exercises: sessionExercises };
+}
+
+/* ---------- edição do rascunho (puras: demo e live usam as mesmas) ---------- */
+
+function mapExercise(
+  draft: WorkoutDraft,
+  exerciseIndex: number,
+  change: (exercise: SessionExercise) => SessionExercise,
+): WorkoutDraft {
+  return { ...draft, exercises: draft.exercises.map((e, i) => (i === exerciseIndex ? change(e) : e)) };
+}
+
+export function updateDraftSet(
+  draft: WorkoutDraft,
+  exerciseIndex: number,
+  setIndex: number,
+  patch: Partial<SetLog>,
+): WorkoutDraft {
+  return mapExercise(draft, exerciseIndex, (e) => ({
+    ...e,
+    sets: e.sets.map((set, j) => (j === setIndex ? { ...set, ...patch } : set)),
+  }));
+}
+
+/** A série nova copia a última (carga e repetições); sem séries, parte da repetição máxima da ficha. */
+export function addDraftSet(draft: WorkoutDraft, exerciseIndex: number): WorkoutDraft {
+  return mapExercise(draft, exerciseIndex, (e) => {
+    const last = e.sets[e.sets.length - 1];
+    return { ...e, sets: [...e.sets, { weightKg: last?.weightKg ?? 0, reps: last?.reps ?? e.repMax, done: false }] };
+  });
+}
+
+export function removeDraftSet(draft: WorkoutDraft, exerciseIndex: number, setIndex: number): WorkoutDraft {
+  return mapExercise(draft, exerciseIndex, (e) => ({ ...e, sets: e.sets.filter((_, j) => j !== setIndex) }));
+}
+
+export function setDraftNotes(draft: WorkoutDraft, notes: string): WorkoutDraft {
+  return { ...draft, notes };
 }
 
 export function draftProgress(draft: WorkoutDraft): { done: number; total: number } {

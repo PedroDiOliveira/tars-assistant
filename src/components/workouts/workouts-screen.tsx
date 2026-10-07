@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronRight, Dumbbell, Flame, Play } from "lucide-react";
+import { ChevronRight, Dumbbell, Flame, Pencil, Play, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { withStoreGate } from "@/components/layout/store-gate";
 import { GoalSheet } from "@/components/goals/goal-sheet";
@@ -13,7 +13,10 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { Surface } from "@/components/shared/surface";
 import { WeekDots } from "@/components/shared/week-dots";
+import { PlanSheet } from "@/components/workouts/plan-sheet";
+import { activeOnly } from "@/domain/catalog";
 import { workoutSummary } from "@/domain/summary";
+import type { WorkoutPlan } from "@/domain/types";
 import {
   daysSinceLastPlan,
   draftProgress,
@@ -54,6 +57,8 @@ function WorkoutsScreenContent() {
   const [replacePlan, setReplacePlan] = useState<string | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [allExercises, setAllExercises] = useState(false);
+  const [planSheet, setPlanSheet] = useState<{ open: boolean; plan: WorkoutPlan | null }>({ open: false, plan: null });
+  const plans = useMemo(() => activeOnly(data.plans), [data.plans]);
 
   function begin(planId: string) {
     if (draft && draft.planId !== planId) {
@@ -105,12 +110,28 @@ function WorkoutsScreenContent() {
 
       {/* Fichas */}
       <section className="space-y-2">
-        <h2 className="px-1 text-base font-semibold">Começar treino</h2>
-        {data.plans.length === 0 ? (
-          <EmptyState icon={Dumbbell} title="Nenhuma ficha cadastrada" description="Crie uma ficha para começar." />
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-base font-semibold">Começar treino</h2>
+          {plans.length > 0 ? (
+            <Button variant="ghost" size="sm" onClick={() => setPlanSheet({ open: true, plan: null })}>
+              <Plus aria-hidden /> Nova ficha
+            </Button>
+          ) : null}
+        </div>
+        {plans.length === 0 ? (
+          <EmptyState
+            icon={Dumbbell}
+            title="Nenhuma ficha cadastrada"
+            description="Crie uma ficha com seus exercícios para começar a registrar treinos."
+            action={
+              <Button onClick={() => setPlanSheet({ open: true, plan: null })}>
+                <Plus aria-hidden /> Criar ficha
+              </Button>
+            }
+          />
         ) : (
           <Surface className="divide-y divide-border/60 overflow-hidden">
-            {data.plans.map((plan) => {
+            {plans.map((plan) => {
               const since = daysSinceLastPlan(data.sessions, plan.id, today);
               const isDraft = draft?.planId === plan.id;
               const main = plan.exercises
@@ -131,6 +152,14 @@ function WorkoutsScreenContent() {
                           : `há ${since} ${pluralize(since, "dia", "dias")}`}
                     </p>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Editar ${plan.name}`}
+                    onClick={() => setPlanSheet({ open: true, plan })}
+                  >
+                    <Pencil aria-hidden />
+                  </Button>
                   <Button
                     size="icon"
                     aria-label={`${isDraft ? "Continuar" : "Iniciar"} ${plan.name}`}
@@ -208,6 +237,8 @@ function WorkoutsScreenContent() {
           ) : null}
         </section>
       ) : null}
+
+      <PlanSheet open={planSheet.open} plan={planSheet.plan} onOpenChange={(open) => setPlanSheet((s) => ({ ...s, open }))} />
 
       <GoalSheet
         open={goalOpen}

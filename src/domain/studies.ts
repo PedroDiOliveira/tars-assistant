@@ -4,6 +4,9 @@ import type { StudySession, StudyTimer } from "./types";
 /** Sessões menores que isto ao finalizar o cronômetro são descartadas como ruído. */
 export const MIN_TIMER_SECONDS = 60;
 
+/** Teto de uma sessão (24 h). Um cronômetro esquecido ligado é registrado com o teto, nunca recusado. */
+export const MAX_SESSION_SECONDS = 24 * 60 * 60;
+
 /* ---------- cronômetro por timestamps ---------- */
 
 export function startTimer(subjectId: string, nowMs: number): StudyTimer {
@@ -33,8 +36,9 @@ export function resumeTimer(timer: StudyTimer, nowMs: number): StudyTimer {
 
 /** A sessão pertence ao dia em que começou (não ao dia em que terminou, se virar a meia-noite). */
 export function finishTimer(timer: StudyTimer, nowMs: number, id: string): StudySession | null {
-  const durationSeconds = timerElapsedSeconds(timer, nowMs);
-  if (durationSeconds < MIN_TIMER_SECONDS) return null;
+  const elapsed = timerElapsedSeconds(timer, nowMs);
+  if (elapsed < MIN_TIMER_SECONDS) return null;
+  const durationSeconds = Math.min(elapsed, MAX_SESSION_SECONDS);
   return {
     id,
     subjectId: timer.subjectId,

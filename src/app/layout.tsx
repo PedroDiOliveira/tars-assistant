@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { BootCheck } from "@/components/layout/boot-check";
+import { ServiceWorkerRegister } from "@/components/layout/service-worker";
 import { AppLaunch } from "@/components/layout/app-launch";
+import { DataProvider } from "@/data/provider";
 import { Toaster } from "@/components/ui/sonner";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { STARTUP_IMAGES } from "@/lib/startup-images";
@@ -16,6 +18,8 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  // Nenhuma tela usa fonte monoespaçada hoje: sem isto ela era baixada em toda página à toa.
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -29,6 +33,8 @@ export const metadata: Metadata = {
     startupImage: STARTUP_IMAGES.map(({ id, media }) => ({ url: `/startup/${id}`, media })),
   },
   formatDetection: { telephone: false },
+  // App pessoal: nunca deve aparecer em buscadores.
+  robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
@@ -57,11 +63,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </p>
         </noscript>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <AppLaunch>
-            {children}
-            <Toaster position="top-center" />
-          </AppLaunch>
+          <DataProvider>
+            <AppLaunch>
+              {children}
+              <Toaster position="top-center" />
+            </AppLaunch>
+          </DataProvider>
         </ThemeProvider>
+        <ServiceWorkerRegister />
         <BootCheck />
       </body>
     </html>

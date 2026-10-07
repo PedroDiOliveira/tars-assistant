@@ -1,74 +1,52 @@
 "use client";
 
 /**
- * Único ponto de acesso a dados para as telas. Hoje lê o store mock (localStorage);
- * na fase real, só este arquivo troca para o Supabase. Telas e componentes nunca
- * importam `./mock/*` diretamente.
+ * Único ponto de acesso a dados para as telas. Há duas fontes com a mesma forma (`DataLayer`):
+ *  - `demo`: dados fictícios no navegador (desenvolvimento, previews, testes E2E);
+ *  - `remote`: dados reais no Supabase, sempre através do servidor.
+ * O modo é fixo por deploy (`NEXT_PUBLIC_APP_MODE`); telas e componentes nunca importam `./demo/*` nem
+ * `./remote/*` diretamente.
  */
-import { useEffect, useState, useSyncExternalStore } from "react";
-import { useShallow } from "zustand/react/shallow";
+import { useEffect, useState } from "react";
+import { IS_LIVE } from "@/lib/app-mode";
 import { todayKey, type DateKey } from "@/lib/dates";
-import type { DataSnapshot } from "@/domain/summary";
-import type { StudyTimer, TxTemplate, WorkoutDraft } from "@/domain/types";
-import { actions, ensureStoreReady, isStoreReady, useTarsStore, type Actions } from "./mock/store";
+import { demoLayer } from "./demo/layer";
+import type { DataLayer } from "./layer";
+import { remoteLayer } from "./remote/layer";
 
-export type { Actions, FinishStudyResult, FinishWorkoutResult } from "./mock/store";
+export type {
+  Actions,
+  AssistantApi,
+  Failure,
+  FinishStudyOutcome,
+  FinishWorkoutOutcome,
+  Result,
+  Success,
+} from "./contract";
+export type { Account, StoreStatus } from "./layer";
+export { acceptAiConsent, useAiConsent } from "./consent";
+export { DataProvider } from "./provider";
 
-function subscribeStoreReady(onReady: () => void) {
-  let subscribed = true;
-  ensureStoreReady().then(
-    () => { if (subscribed) onReady(); },
-    // StoreGate exposes its recovery UI if initialization fails.
-    () => undefined,
-  );
-  return () => { subscribed = false; };
-}
+const layer: DataLayer = IS_LIVE ? remoteLayer : demoLayer;
 
-const storeNotReadyOnServer = () => false;
-
-/** true quando os dados locais já foram carregados. Antes disso, mostre um esqueleto. */
-export function useStoreReady(): boolean {
-  // A streamed page may hydrate after AppLaunch has already initialized the store.
-  // Its first hydration render must still match the server's skeleton.
-  return useSyncExternalStore(subscribeStoreReady, isStoreReady, storeNotReadyOnServer);
-}
-
+export const useStoreStatus = layer.useStoreStatus;
+export const useLaunchReady = layer.useLaunchReady;
 /** Tudo o que o domínio lê para calcular totais, metas e históricos. */
-export function useData(): DataSnapshot {
-  return useTarsStore(
-    useShallow((s) => ({
-      categories: s.categories,
-      transactions: s.transactions,
-      goals: s.goals,
-      exercises: s.exercises,
-      plans: s.plans,
-      sessions: s.sessions,
-      subjects: s.subjects,
-      studySessions: s.studySessions,
-      books: s.books,
-      readingSessions: s.readingSessions,
-    })),
-  );
+export const useData = layer.useData;
+export const useTemplates = layer.useTemplates;
+export const useDraft = layer.useDraft;
+export const useTimer = layer.useTimer;
+export const useAccount = layer.useAccount;
+export const signOut = layer.signOut;
+export const assistant = layer.assistant;
+
+export function useActions() {
+  return layer.actions;
 }
 
-export function useTemplates(): TxTemplate[] {
-  return useTarsStore((s) => s.templates);
-}
-
-export function useDraft(): WorkoutDraft | null {
-  return useTarsStore((s) => s.draft);
-}
-
-export function useTimer(): StudyTimer | null {
-  return useTarsStore((s) => s.timer);
-}
-
+/** Nome para exibir (saudação, avatar). */
 export function useDisplayName(): string {
-  return useTarsStore((s) => s.displayName);
-}
-
-export function useActions(): Actions {
-  return actions;
+  return useAccount().displayName;
 }
 
 /** Data de hoje no fuso do app; vira sozinha à meia-noite. */

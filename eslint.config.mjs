@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Builds de verificação (NEXT_DIST_DIR): código gerado, nunca lintar.
+    ".next-*/**",
   ]),
 ]);
 

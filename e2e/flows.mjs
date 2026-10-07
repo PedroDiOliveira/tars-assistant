@@ -138,7 +138,9 @@ const money = (s) => {
   await page.waitForURL("**/treino");
   await ready();
   const weekAfter = await weekText();
-  check("Só após finalizar o treino conta na meta semanal", weekAfter !== weekBefore && weekAfter.startsWith("2 de"), `${weekBefore} -> ${weekAfter}`);
+  // O seed é relativo a "hoje", então a base muda com o dia da semana: o que importa é ganhar exatamente 1.
+  const doneOf = (text) => Number(norm(text).match(/^(\d+) de/)[1]);
+  check("Só após finalizar o treino conta na meta semanal", doneOf(weekAfter) === doneOf(weekBefore) + 1, `${weekBefore} -> ${weekAfter}`);
 
   // ---------- 6. Estudos: cronômetro sobrevive a reload e pausa não soma tempo ----------
   await page.goto(BASE + "/estudos", { waitUntil: "networkidle" });
@@ -171,10 +173,10 @@ const money = (s) => {
   const finishBtn = page.getByRole("button", { name: "Finalizar" });
   await finishBtn.dblclick().catch(() => {});
   await page.waitForTimeout(800);
-  // sessões criadas agora têm id "st_..." (as do seed são "st-N")
+  // sessões criadas agora têm id UUID (as do seed são "st-N")
   const created = await page.evaluate(() => {
     const raw = JSON.parse(localStorage.getItem("tars-demo-v1"));
-    return raw.state.studySessions.filter((s) => s.id.startsWith("st_")).map((s) => s.durationSeconds);
+    return raw.state.studySessions.filter((s) => !s.id.startsWith("st-")).map((s) => s.durationSeconds);
   });
   check("Finalizar (toque duplo) registra uma única sessão de ~30min", created.length === 1 && created[0] >= 1800 && created[0] < 1830, JSON.stringify(created));
   check("Cronômetro some depois de finalizar", (await page.locator("[role=timer]").count()) === 0);

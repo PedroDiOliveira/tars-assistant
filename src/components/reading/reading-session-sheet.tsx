@@ -1,45 +1,50 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { toast } from "sonner";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetFooter } from "@/components/shared/sheet";
 import { currentPage, pagesRead, pickCurrentBook, validateReadingSession } from "@/domain/reading";
+import type { ReadingSession } from "@/domain/types";
 import { useActions, useData, useToday } from "@/data";
 import { addDays, isValidDateKey, type DateKey } from "@/lib/dates";
 import { pluralize } from "@/lib/format";
+import { notify } from "@/components/shared/notify";
 
 interface ReadingSessionSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** livro pré-selecionado; sem ele, usa o livro em foco */
   bookId?: string | null;
+  /** leitura a editar; sem ela, registra uma nova */
+  session?: ReadingSession | null;
 }
 
-export function ReadingSessionSheet({ open, onOpenChange, bookId }: ReadingSessionSheetProps) {
+export function ReadingSessionSheet({ open, onOpenChange, bookId, session = null }: ReadingSessionSheetProps) {
   return (
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      title="Registrar leitura"
-      description="Informe até que página você chegou."
+      title={session ? "Editar leitura" : "Registrar leitura"}
+      description={session ? "Corrija as páginas ou a data desta leitura." : "Informe até que página você chegou."}
       module="reading"
     >
-      <ReadingSessionForm bookId={bookId ?? null} onDone={() => onOpenChange(false)} />
+      {open ? <ReadingSessionForm key={session?.id ?? "new"} bookId={bookId ?? null} session={session} onDone={() => onOpenChange(false)} /> : null}
     </Sheet>
   );
 }
 
-function ReadingSessionForm({ bookId, onDone }: { bookId: string | null; onDone: () => void }) {
+function ReadingSessionForm({ bookId, session, onDone }: { bookId: string | null; session: ReadingSession | null; onDone: () => void }) {
   const data = useData();
   const today = useToday();
-  const { addReadingSession } = useActions();
+  const { addReadingSession, updateReadingSession } = useActions();
 
-  // Qualquer livro que não esteja concluído pode receber leitura.
-  const candidates = data.books.filter((b) => b.status !== "done");
+  // Registrar: qualquer livro não concluído pode receber leitura. Editar: só o livro da própria leitura.
+  const editingBook = session ? (data.books.find((b) => b.id === session.bookId) ?? null) : null;
+  const candidates = session ? (editingBook ? [editingBook] : []) : data.books.filter((b) => b.status !== "done");
   const initialBook =
+    editingBook ??
     candidates.find((b) => b.id === bookId) ??
     pickCurrentBook(data.books, data.readingSessions) ??
     candidates[0] ??
@@ -48,10 +53,10 @@ function ReadingSessionForm({ bookId, onDone }: { bookId: string | null; onDone:
   const [selectedId, setSelectedId] = useState<string | null>(initialBook?.id ?? null);
   const book = data.books.find((b) => b.id === selectedId) ?? null;
   const [startText, setStartText] = useState<string>(
-    initialBook ? String(currentPage(initialBook, data.readingSessions)) : "0",
+    session ? String(session.startPage) : initialBook ? String(currentPage(initialBook, data.readingSessions)) : "0",
   );
-  const [endText, setEndText] = useState("");
-  const [date, setDate] = useState<DateKey>(today);
+  const [endText, setEndText] = useState(session ? String(session.endPage) : "");
+  const [date, setDate] = useState<DateKey>(session?.occurredOn ?? today);
   const submitted = useRef(false);
 
   if (!book) {
@@ -77,16 +82,19 @@ function ReadingSessionForm({ bookId, onDone }: { bookId: string | null; onDone:
     setEndText("");
   }
 
-  function save() {
+  async function save() {
     if (submitted.current || !valid || !book) return;
     submitted.current = true;
-    const failure = addReadingSession({ bookId: book.id, occurredOn: date, startPage: start, endPage: end });
-    if (failure) {
+    const result = session
+      ? await updateReadingSession(session.id, { occurredOn: date, startPage: start, endPage: end, notes: session.notes })
+      : await addReadingSession({ bookId: book.id, occurredOn: date, startPage: start, endPage: end });
+    const message = session
+      ? "Leitura atualizada"
+      : `${pages} ${pluralize(pages, "página registrada", "páginas registradas")} em ${book.title}`;
+    if (!notify(result, message)) {
       submitted.current = false;
-      toast.error(failure);
       return;
     }
-    toast.success(`${pages} ${pluralize(pages, "página registrada", "páginas registradas")} em ${book.title}`);
     onDone();
   }
 
@@ -184,7 +192,7 @@ function ReadingSessionForm({ bookId, onDone }: { bookId: string | null; onDone:
 
       <SheetFooter>
         <Button size="lg" disabled={!valid} onClick={save}>
-          Registrar leitura
+          {session ? "Salvar alterações" : "Registrar leitura"}
         </Button>
       </SheetFooter>
     </div>

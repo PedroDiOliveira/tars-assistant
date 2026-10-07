@@ -2,11 +2,11 @@
 
 import { useEffect, useEffectEvent, useState, type ReactNode } from "react";
 import { LogoMark } from "@/components/brand/logo";
-import { useStoreReady } from "@/data";
+import { useLaunchReady } from "@/data";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import "./app-launch.css";
 
-const INTRO_MS = 2100;
+const INTRO_MS = 3100;
 const EXIT_MS = 550;
 const MAX_WAIT_MS = 8000;
 
@@ -14,7 +14,7 @@ type Phase = "playing" | "leaving" | "ready";
 
 /** Lives in the root layout so route changes never replay the launch animation. */
 export function AppLaunch({ children }: { children: ReactNode }) {
-  const storeReady = useStoreReady();
+  const storeReady = useLaunchReady();
   const isReady = useEffectEvent(() => storeReady);
   const [launch, setLaunch] = useState<{ phase: Phase; sequence: number }>({
     phase: "playing",
@@ -112,10 +112,6 @@ export function AppLaunch({ children }: { children: ReactNode }) {
               <p className="launch-name">{APP_NAME}</p>
               <p className="launch-tagline">{APP_TAGLINE}</p>
             </div>
-          </div>
-          <div className="launch-footer" aria-hidden="true">
-            <span className="launch-line" />
-            <span>Um pouco melhor, todos os dias.</span>
           </div>
         </div>
       )}

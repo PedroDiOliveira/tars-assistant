@@ -127,7 +127,7 @@ try {
   pass("Reduced motion opens promptly without the blade animation");
   await reduced.close();
 
-  // Narrow portrait and landscape retain the logo, wordmark and footer without overflow.
+  // Narrow portrait and landscape retain the logo and wordmark without overflow.
   for (const viewport of [{ width: 320, height: 568 }, { width: 852, height: 393 }]) {
     const small = await browser.newContext({ ...options, viewport });
     const smallPage = await small.newPage();
@@ -136,8 +136,7 @@ try {
     await playing(smallPage);
     assert.equal(await smallPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     const wordmark = await smallPage.locator(".launch-wordmark").boundingBox();
-    const footer = await smallPage.locator(".launch-footer").boundingBox();
-    assert.ok(wordmark.y + wordmark.height < footer.y);
+    assert.ok(wordmark.y >= 0 && wordmark.y + wordmark.height <= viewport.height);
     await ready(smallPage);
     await small.close();
   }

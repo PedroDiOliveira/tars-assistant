@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { withStoreGate } from "@/components/layout/store-gate";
 import { useRouter } from "next/navigation";
@@ -13,21 +14,25 @@ import { Segmented } from "@/components/shared/segmented";
 import { SectionTitle } from "@/components/shared/section-title";
 import { Surface } from "@/components/shared/surface";
 import { SubHeader } from "@/components/layout/sub-header";
+import { activeOnly } from "@/domain/catalog";
 import { goalFor } from "@/domain/goals";
 import { formatBRL, formatBRLCompact } from "@/domain/money";
 import type { Goal, GoalKind } from "@/domain/types";
-import { useActions, useData, useDisplayName, useTemplates, useToday } from "@/data";
+import { signOut, useAccount, useActions, useData, useDraft, useTemplates, useToday } from "@/data";
 import { APP_NAME } from "@/lib/constants";
 import { monthOf, monthStart, weekStart } from "@/lib/dates";
 import { formatDayMonth, formatMinutes } from "@/lib/format";
 import { cn } from "cn";
+import { notify } from "@/components/shared/notify";
 
 type ThemeChoice = "system" | "light" | "dark";
 
 function SettingsScreenContent() {
   const data = useData();
   const today = useToday();
-  const name = useDisplayName();
+  const account = useAccount();
+  const name = account.displayName || "Você";
+  const draft = useDraft();
   const templates = useTemplates();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
@@ -36,6 +41,21 @@ function SettingsScreenContent() {
   const [goalOpen, setGoalOpen] = useState(false);
   const [goalTarget, setGoalTarget] = useState<GoalTarget | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
+  const [signOutOpen, setSignOutOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function leave() {
+    if (!account.isLive) {
+      router.push("/login");
+      return;
+    }
+    setSigningOut(true);
+    const result = await signOut(); // em sucesso a página recarrega em /login
+    if (!result.ok) {
+      setSigningOut(false);
+      toast.error(result.error);
+    }
+  }
 
   const monthStartKey = monthStart(monthOf(today));
   const weekStartKey = weekStart(today);
@@ -68,7 +88,7 @@ function SettingsScreenContent() {
     );
   }
 
-  const expenseCategories = data.categories.filter((c) => c.type === "expense");
+  const expenseCategories = activeOnly(data.categories).filter((c) => c.type === "expense");
 
   return (
     <div data-module="primary" className="pb-10">
@@ -81,7 +101,9 @@ function SettingsScreenContent() {
           </span>
           <div>
             <p className="text-lg font-semibold">{name}</p>
-            <p className="text-sm text-muted-foreground">Conta de demonstração · America/Sao_Paulo · BRL</p>
+            <p className="text-sm text-muted-foreground">
+              {account.isLive ? `${account.email ?? "Conta"} · America/Sao_Paulo · BRL` : "Conta de demonstração · America/Sao_Paulo · BRL"}
+            </p>
           </div>
         </Surface>
 
@@ -123,9 +145,25 @@ function SettingsScreenContent() {
         <section className="space-y-3">
           <SectionTitle hint="Meta semanal por matéria">Estudo por matéria</SectionTitle>
           <Surface className="divide-y divide-border/70 overflow-hidden">
-            {data.subjects.map((s) =>
+            {activeOnly(data.subjects).map((s) =>
               goalRow("study_minutes", s.id, s.name, formatMinutes, `Meta semanal · ${s.name}`),
             )}
+          </Surface>
+        </section>
+
+        <section className="space-y-3">
+          <SectionTitle hint="Criar, renomear e arquivar">Catálogos</SectionTitle>
+          <Surface className="overflow-hidden">
+            <Link
+              href="/configuracoes/catalogos"
+              className="flex min-h-14 w-full items-center gap-3 px-4 py-2 transition active:bg-muted/60"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">Categorias, exercícios e matérias</p>
+                <p className="text-sm text-muted-foreground">Também as fichas arquivadas</p>
+              </div>
+              <ChevronRight className="size-5 shrink-0 text-muted-foreground/60" aria-hidden />
+            </Link>
           </Surface>
         </section>
 
@@ -149,9 +187,8 @@ function SettingsScreenContent() {
                     variant="ghost"
                     size="icon"
                     aria-label={`Remover atalho ${t.label}`}
-                    onClick={() => {
-                      deleteTemplate(t.id);
-                      toast.success("Atalho removido");
+                    onClick={async () => {
+                      notify(await deleteTemplate(t.id), "Atalho removido");
                     }}
                   >
                     <Trash2 aria-hidden />
@@ -165,29 +202,55 @@ function SettingsScreenContent() {
         <section className="space-y-3">
           <SectionTitle>Dados</SectionTitle>
           <div className="space-y-2">
-            <Button variant="outline" size="lg" className="w-full justify-start" disabled>
-              <Download aria-hidden /> Exportar dados (JSON) · em breve
-            </Button>
-            <Button variant="outline" size="lg" className="w-full justify-start" onClick={() => setResetOpen(true)}>
-              <RotateCcw aria-hidden /> Resetar dados de demonstração
-            </Button>
+            {account.isLive ? (
+              <Button asChild variant="outline" size="lg" className="w-full justify-start">
+                <a href="/api/export" download>
+                  <Download aria-hidden /> Exportar dados (JSON)
+                </a>
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" size="lg" className="w-full justify-start" disabled>
+                  <Download aria-hidden /> Exportar dados (JSON) · só no modo real
+                </Button>
+                <Button variant="outline" size="lg" className="w-full justify-start" onClick={() => setResetOpen(true)}>
+                  <RotateCcw aria-hidden /> Resetar dados de demonstração
+                </Button>
+              </>
+            )}
           </div>
         </section>
 
         <section className="space-y-3">
           <SectionTitle>Conta</SectionTitle>
-          <Button variant="secondary" size="lg" className="w-full justify-start" onClick={() => router.push("/login")}>
-            <LogOut aria-hidden /> Sair
+          <Button
+            variant="secondary"
+            size="lg"
+            className="w-full justify-start"
+            disabled={signingOut}
+            onClick={() => (account.isLive && draft ? setSignOutOpen(true) : void leave())}
+          >
+            <LogOut aria-hidden /> {signingOut ? "Saindo…" : "Sair"}
           </Button>
         </section>
 
         <p className="px-1 text-center text-xs text-muted-foreground">
-          {APP_NAME} · protótipo visual. Os dados de demonstração ficam só neste navegador e não representam
-          dados pessoais reais.
+          {account.isLive
+            ? `${APP_NAME} · seus dados ficam no servidor, protegidos por login.`
+            : `${APP_NAME} · protótipo visual. Os dados de demonstração ficam só neste navegador e não representam dados pessoais reais.`}
         </p>
       </div>
 
       <GoalSheet open={goalOpen} onOpenChange={setGoalOpen} target={goalTarget} />
+      <ConfirmDialog
+        open={signOutOpen}
+        onOpenChange={setSignOutOpen}
+        title="Sair e apagar o treino em andamento?"
+        description="Há um treino em andamento guardado só neste aparelho. Ao sair ele será apagado. Finalize o treino antes se quiser registrá-lo."
+        confirmLabel="Sair mesmo assim"
+        destructive
+        onConfirm={() => void leave()}
+      />
       <ConfirmDialog
         open={resetOpen}
         onOpenChange={setResetOpen}

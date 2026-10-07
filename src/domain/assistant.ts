@@ -15,6 +15,7 @@ import {
 } from "@/lib/format";
 import { expensesByCategory, monthSummary } from "./finance";
 import { formatBRL } from "./money";
+import type { TxProposal } from "./quick-entry";
 import { pagesInPeriod } from "./reading";
 import { secondsInPeriod } from "./studies";
 import { readingWeekSummary, workoutSummary, type DataSnapshot } from "./summary";
@@ -24,6 +25,8 @@ export interface AssistantReply {
   text: string;
   /** período efetivamente consultado, sempre informado */
   period?: string;
+  /** lançamento proposto: só é salvo quando o usuário confirma na tela */
+  proposal?: TxProposal;
 }
 
 function normalize(text: string): string {
@@ -132,8 +135,9 @@ export function answerQuestion(question: string, data: DataSnapshot, today: Date
   if (/qual materia.*(menos|menor)/.test(q)) {
     const period = weekLabel(today);
     const wk = weekPeriod(today);
-    if (data.subjects.length === 0) return { text: "Você ainda não cadastrou matérias.", period };
-    const rows = data.subjects
+    const activeSubjects = data.subjects.filter((s) => !s.archived);
+    if (activeSubjects.length === 0) return { text: "Você ainda não cadastrou matérias.", period };
+    const rows = activeSubjects
       .map((s) => ({ s, seconds: secondsInPeriod(data.studySessions, wk, s.id) }))
       .sort((a, b) => a.seconds - b.seconds);
     const least = rows[0];

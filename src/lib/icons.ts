@@ -26,6 +26,20 @@ export const CATEGORY_ICONS: Record<string, LucideIcon> = {
   plus: CirclePlus,
 };
 
+/** Nome em português de cada ícone (para o seletor e para leitores de tela). */
+export const CATEGORY_ICON_LABELS: Record<string, string> = {
+  utensils: "Comida",
+  car: "Transporte",
+  home: "Casa",
+  heart: "Saúde",
+  fun: "Lazer",
+  bag: "Compras",
+  school: "Estudo",
+  dots: "Outros",
+  wage: "Salário",
+  plus: "Entrada",
+};
+
 export function categoryIcon(key: string | undefined): LucideIcon {
   return (key && CATEGORY_ICONS[key]) || Ellipsis;
 }

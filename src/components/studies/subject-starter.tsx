@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Play, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { HueDot } from "@/components/shared/hue-bubble";
+import { activeOnly } from "@/domain/catalog";
 import { useActions, useData } from "@/data";
+import { notify } from "@/components/shared/notify";
 
 interface SubjectStarterProps {
   /** chamada ao tocar numa matéria: inicia o cronômetro para ela */
@@ -19,9 +21,10 @@ interface SubjectStarterProps {
 
 /** Lista de matérias como botões grandes: um toque inicia o cronômetro. */
 export function SubjectStarter({ onStart, armDelayMs = 0 }: SubjectStarterProps) {
-  const { subjects } = useData();
+  const subjects = activeOnly(useData().subjects);
   const { addSubject } = useActions();
   const [adding, setAdding] = useState(false);
+  const creating = useRef(false);
   const [name, setName] = useState("");
   const [armed, setArmed] = useState(armDelayMs === 0);
 
@@ -31,13 +34,16 @@ export function SubjectStarter({ onStart, armDelayMs = 0 }: SubjectStarterProps)
     return () => clearTimeout(timer);
   }, [armDelayMs]);
 
-  function create() {
+  async function create() {
     const trimmed = name.trim();
-    if (!trimmed) return;
-    const id = addSubject(trimmed);
+    if (!trimmed || creating.current) return;
+    creating.current = true;
+    const result = await addSubject(trimmed);
+    creating.current = false;
+    if (!notify(result)) return;
     setName("");
     setAdding(false);
-    onStart(id);
+    onStart(result.value.id);
   }
 
   return (
