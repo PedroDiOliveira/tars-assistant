@@ -10,7 +10,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test:e2e": "node e2e/flows.mjs",
     "test:splash": "node e2e/splash.mjs",
     "db:test": "vitest run supabase/tests",
