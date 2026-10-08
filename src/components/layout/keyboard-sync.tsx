@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { KEYBOARD_EVENT, keyboardInset } from "@/lib/keyboard";
+import { KEYBOARD_EVENT, keyboardMetrics } from "@/lib/keyboard";
 
 /**
  * Acompanha o teclado virtual e o publica no `<html>`, para o CSS poder reagir (nada aqui renderiza):
  *
- * - `--kb-inset`: quanto o teclado cobre do fim da janela (0px sem teclado). Elementos fixos embaixo usam como `bottom`.
+ * - `--kb-inset`: quanto subir os elementos fixos embaixo para ficarem colados no teclado (0px sem teclado). Usam como `bottom`.
  * - `--vv-height`: altura da parte visível; só existe com o teclado aberto. O sheet limita a própria altura a ela.
  * - `data-keyboard`: presente com o teclado aberto. Some com a área segura de baixo (o teclado já a cobre).
  *
@@ -18,25 +18,24 @@ export function KeyboardInsetSync() {
     if (!viewport) return;
     const root = document.documentElement;
     let frame = 0;
-    let lastInset = -1;
-    let lastHeight = -1;
+    let lastKey = "";
 
     const apply = () => {
       frame = 0;
-      const inset = keyboardInset({
+      const visibleHeight = Math.round(viewport.height);
+      const { height, lift } = keyboardMetrics({
         layoutHeight: window.innerHeight,
-        visibleHeight: viewport.height,
+        visibleHeight,
         offsetTop: viewport.offsetTop,
         scale: viewport.scale,
       });
-      const height = Math.round(viewport.height);
-      if (inset === lastInset && (inset === 0 || height === lastHeight)) return;
-      lastInset = inset;
-      lastHeight = height;
+      const key = height === 0 ? "closed" : `${lift}/${visibleHeight}`;
+      if (key === lastKey) return;
+      lastKey = key;
 
-      if (inset > 0) {
-        root.style.setProperty("--kb-inset", `${inset}px`);
-        root.style.setProperty("--vv-height", `${height}px`);
+      if (height > 0) {
+        root.style.setProperty("--kb-inset", `${lift}px`);
+        root.style.setProperty("--vv-height", `${visibleHeight}px`);
         root.setAttribute("data-keyboard", "");
       } else {
         root.style.removeProperty("--kb-inset");

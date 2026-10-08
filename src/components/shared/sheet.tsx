@@ -47,6 +47,9 @@ export function SheetFooter({ children, className }: { children: ReactNode; clas
  * Corpo rolável. Com o teclado aberto o sheet encolhe para a parte visível da tela (ver `.sheet-content` em
  * globals.css); aqui garantimos que o campo que está sendo digitado, e o rótulo dele, apareçam dentro dessa área
  * (nem abaixo do teclado, nem atrás do botão de salvar), tanto ao focar um campo quanto quando o teclado abre depois.
+ *
+ * Enquanto o teclado está aberto, arrastar o corpo só rola o formulário: ao chegar no começo, puxar mais para baixo
+ * fechava o sheet (e o que foi digitado) como se fosse um cancelamento. O vaul respeita `data-vaul-no-drag`.
  */
 function SheetBody({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -55,6 +58,8 @@ function SheetBody({ children }: { children: ReactNode }) {
     const body = ref.current;
     if (!body) return;
     let frame = 0;
+    const lockDrag = () => body.toggleAttribute("data-vaul-no-drag", document.documentElement.hasAttribute("data-keyboard"));
+    lockDrag();
     // Dois quadros: o primeiro aplica o novo tamanho do sheet, o segundo mede já com ele.
     const reveal = () => {
       cancelAnimationFrame(frame);
@@ -62,12 +67,16 @@ function SheetBody({ children }: { children: ReactNode }) {
         frame = requestAnimationFrame(() => revealFocusedField(body));
       });
     };
+    const onKeyboard = () => {
+      lockDrag();
+      reveal();
+    };
     body.addEventListener("focusin", reveal);
-    window.addEventListener(KEYBOARD_EVENT, reveal);
+    window.addEventListener(KEYBOARD_EVENT, onKeyboard);
     return () => {
       cancelAnimationFrame(frame);
       body.removeEventListener("focusin", reveal);
-      window.removeEventListener(KEYBOARD_EVENT, reveal);
+      window.removeEventListener(KEYBOARD_EVENT, onKeyboard);
     };
   }, []);
 

@@ -168,6 +168,7 @@ try {
         visTop: vv.offsetTop,
         visBottom: vv.offsetTop + vv.height,
         sheet: rect(sheet),
+        title: rect(sheet?.querySelector('[data-slot="drawer-title"]')),
         footer: rect(sheet?.querySelector(".sticky")),
         scroller: rect(sheet?.querySelector(".overflow-y-auto")),
         active: rect(active),
@@ -197,7 +198,7 @@ try {
     await setKeyboard(KEYBOARD, pan);
     const m = await measure();
     const slug = scenario.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    await page.screenshot({ path: path.join(OUT, `kb-${slug}${pan ? "-pan" : ""}.png`) });
+    await page.screenshot({ path: path.join(OUT, `kb-${slug}${pan ? `-pan${pan}` : ""}.png`) });
 
     check(
       `${label}: o sheet termina acima do teclado`,
@@ -208,6 +209,11 @@ try {
       `${label}: o sheet cabe na área visível (topo não sai da tela)`,
       m.sheet && m.sheet.top >= m.visTop - TOL,
       `sheet.top=${m.sheet?.top.toFixed(0)} topo visível=${m.visTop.toFixed(0)}`,
+    );
+    check(
+      `${label}: o título (começo do formulário) aparece na tela`,
+      m.title && m.title.top >= m.visTop - TOL && m.title.bottom <= m.visBottom + TOL,
+      `título ${m.title?.top.toFixed(0)}–${m.title?.bottom.toFixed(0)}, área visível ${m.visTop.toFixed(0)}–${m.visBottom.toFixed(0)}`,
     );
     const limit = m.footer ? m.footer.top : m.scroller?.bottom ?? m.visBottom;
     check(
@@ -236,8 +242,11 @@ try {
   }
 
   for (const scenario of sheets) await runSheet(scenario);
-  await runSheet(sheets[0], 40);
-  await runSheet(sheets[2], 40);
+  // iOS rola a parte visível ao abrir o teclado: um pouco (40) e a altura inteira do teclado (o caso real mais comum).
+  for (const pan of [40, KEYBOARD]) {
+    await runSheet(sheets[0], pan);
+    await runSheet(sheets[2], pan);
+  }
 
   // ---------- assistente: o campo de mensagem fica numa barra fixa embaixo ----------
   await appReady("/assistente");

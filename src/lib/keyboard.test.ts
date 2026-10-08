@@ -1,35 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { keyboardInset, scrollDeltaToReveal } from "./keyboard";
+import { keyboardMetrics, scrollDeltaToReveal } from "./keyboard";
 
 const iphone = { layoutHeight: 844, scale: 1 };
 
-describe("keyboardInset", () => {
-  it("é 0 sem teclado", () => {
-    expect(keyboardInset({ ...iphone, visibleHeight: 844, offsetTop: 0 })).toBe(0);
+describe("keyboardMetrics", () => {
+  const closed = { height: 0, lift: 0 };
+
+  it("é zero sem teclado", () => {
+    expect(keyboardMetrics({ ...iphone, visibleHeight: 844, offsetTop: 0 })).toEqual(closed);
   });
 
-  it("é a parte do fim da janela que o teclado cobre (Android e iOS sem rolagem)", () => {
-    expect(keyboardInset({ ...iphone, visibleHeight: 508, offsetTop: 0 })).toBe(336);
+  it("Android e iOS sem rolagem: o teclado cobre o fim da janela, então os elementos fixos sobem a altura dele", () => {
+    expect(keyboardMetrics({ ...iphone, visibleHeight: 508, offsetTop: 0 })).toEqual({ height: 336, lift: 336 });
   });
 
-  it("desconta a rolagem que o iOS aplica na parte visível ao abrir o teclado", () => {
-    // O iOS desce a parte visível 40 px: ela termina em 40 + 508 = 548, então só 296 px da janela ficam cobertos.
-    expect(keyboardInset({ ...iphone, visibleHeight: 508, offsetTop: 40 })).toBe(296);
+  it("iOS rolando um pouco a parte visível: o ponto de ancoragem desconta a rolagem", () => {
+    // A parte visível desce 40 px e termina em 548: só 296 px do fim da janela ficam cobertos.
+    expect(keyboardMetrics({ ...iphone, visibleHeight: 508, offsetTop: 40 })).toEqual({ height: 336, lift: 296 });
+  });
+
+  it("iOS rolando a parte visível a altura inteira do teclado: teclado aberto, mas nada a subir", () => {
+    // Era o defeito: o fim da janela já coincide com o topo do teclado, e a altura visível (508) ainda precisa limitar o sheet.
+    expect(keyboardMetrics({ ...iphone, visibleHeight: 508, offsetTop: 336 })).toEqual({ height: 336, lift: 0 });
+  });
+
+  it("nunca devolve um deslocamento negativo se a rolagem passar do teclado", () => {
+    expect(keyboardMetrics({ ...iphone, visibleHeight: 508, offsetTop: 400 })).toEqual({ height: 336, lift: 0 });
   });
 
   it("ignora diferenças pequenas: barra do navegador, barra de atalhos de teclado físico", () => {
-    expect(keyboardInset({ ...iphone, visibleHeight: 800, offsetTop: 0 })).toBe(0);
-    expect(keyboardInset({ ...iphone, visibleHeight: 790, offsetTop: 0 })).toBe(0);
+    expect(keyboardMetrics({ ...iphone, visibleHeight: 800, offsetTop: 0 })).toEqual(closed);
+    expect(keyboardMetrics({ ...iphone, visibleHeight: 790, offsetTop: 0 })).toEqual(closed);
   });
 
   it("não confunde zoom por pinça com teclado", () => {
-    expect(keyboardInset({ layoutHeight: 844, visibleHeight: 422, offsetTop: 0, scale: 2 })).toBe(0);
+    expect(keyboardMetrics({ layoutHeight: 844, visibleHeight: 422, offsetTop: 0, scale: 2 })).toEqual(closed);
   });
 
-  it("não fica negativo se a janela de layout também encolher junto com o teclado", () => {
-    // Navegadores que redimensionam a janela (interactive-widget=resizes-content): o CSS normal já resolve.
-    expect(keyboardInset({ layoutHeight: 508, visibleHeight: 508, offsetTop: 0, scale: 1 })).toBe(0);
-    expect(keyboardInset({ layoutHeight: 500, visibleHeight: 508, offsetTop: 0, scale: 1 })).toBe(0);
+  it("navegadores que redimensionam a janela junto com o teclado não precisam de ajuste", () => {
+    // interactive-widget=resizes-content: o CSS normal (dvh, bottom: 0) já resolve.
+    expect(keyboardMetrics({ layoutHeight: 508, visibleHeight: 508, offsetTop: 0, scale: 1 })).toEqual(closed);
+    expect(keyboardMetrics({ layoutHeight: 500, visibleHeight: 508, offsetTop: 0, scale: 1 })).toEqual(closed);
   });
 });
 
