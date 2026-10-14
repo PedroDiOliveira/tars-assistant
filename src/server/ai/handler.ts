@@ -146,7 +146,8 @@ export async function handleAssistant(deps: HandlerDeps): Promise<HandlerRespons
 
   const common = { tokens, ms: now() - startedAt, tools: run.toolsCalled, provider: provider.name };
   if (run.reply) {
-    log("info", "assistant.reply", { ...common, status: 200, proposal: Boolean(run.reply.proposal) });
+    // Só a contagem: o log nunca guarda o conteúdo da pergunta nem da resposta.
+    log("info", "assistant.reply", { ...common, status: 200, proposal: Boolean(run.reply.proposal), cards: run.reply.cards?.length ?? 0 });
     return { status: 200, body: { reply: run.reply } };
   }
   const failure = failureResponse(run.failure?.kind ?? "bad_response");

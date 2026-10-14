@@ -83,7 +83,11 @@ describe("caminho feliz", () => {
       ],
     });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ reply: { text: "Em outubro, receitas de R$ 3.500,00 e despesas de R$ 42,00.", period: "Outubro de 2026" } });
+    // O servidor manda o texto e só a REFERÊNCIA do card (tipo + mês): números e nomes ficam no app, que os lê dos próprios dados.
+    expect(res.body).toEqual({
+      reply: { text: "Em outubro, receitas de R$ 3.500,00 e despesas de R$ 42,00.", period: "Outubro de 2026", cards: [{ kind: "finance_month", month: "2026-10" }] },
+    });
+    expect(JSON.stringify(res.body)).not.toMatch(/Alimentação|SEGREDO-DA-ANA|3\.458/); // nada de dado de categoria nem valor no card
 
     const toolMessage = provider.requests[1].messages.find((m) => m.role === "tool") as { content: string };
     const result = JSON.parse(toolMessage.content);
@@ -101,10 +105,11 @@ describe("caminho feliz", () => {
   });
 
   it("isolamento: o assistente do Bruno não enxerga NADA da Ana", async () => {
-    const { provider } = await post({
+    const { res, provider } = await post({
       user: B,
       steps: [{ toolCalls: [call("c1", "get_financial_summary", { month: "2026-10" })] }, { content: "Sem registros." }],
     });
+    expect(res.body).toEqual({ reply: { text: "Sem registros.", period: "Outubro de 2026" } }); // sem registros: nenhum card
     const result = JSON.parse((provider.requests[1].messages.find((m) => m.role === "tool") as { content: string }).content);
     expect(result).toMatchObject({ hasRecords: false, transactionCount: 0, topExpenseCategories: [] });
     expect(JSON.stringify(provider.requests)).not.toContain(A);

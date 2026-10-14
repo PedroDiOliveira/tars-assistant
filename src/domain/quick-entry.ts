@@ -111,6 +111,9 @@ export function parseQuickEntry(
 
   const norm = normalize(trimmed);
   const has = (words: string[]) => words.some((w) => new RegExp(`\\b${w}\\b`).test(norm));
+  // Pergunta sobre os números ("Quanto gastei este mês?") não é um lançamento: o verbo "gastei" sem valor não pode
+  // virar "Qual foi o valor?". Quem responde é o assistente.
+  if (/^(quanto|quantos|quantas|qual|quais|como)\b/.test(norm)) return { kind: "none" };
   // O verbo manda; "salário" sozinho só desempata para receita.
   const type: TxType | null = has(EXPENSE_VERBS)
     ? "expense"

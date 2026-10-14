@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_MODEL_CALLS, MULTIPLE_ENTRIES_TEXT, PROPOSAL_TEXT, runAssistant } from "./assistant";
+import { CARDS_ONLY_TEXT, MAX_MODEL_CALLS, MULTIPLE_ENTRIES_TEXT, PROPOSAL_TEXT, runAssistant } from "./assistant";
 import { ProviderError } from "./provider";
 import { call, sampleData, scripted, TODAY, type Step } from "./fixtures";
 
@@ -16,7 +16,11 @@ describe("pergunta sobre os dados", () => {
       { content: "Em outubro você gastou R$ 85,00." },
     ], "Quanto gastei este mês?");
 
-    expect(run.reply).toEqual({ text: "Em outubro você gastou R$ 85,00.", period: "Outubro de 2026" }); // o mesmo rótulo de mês que a tela de Finanças usa
+    expect(run.reply).toEqual({
+      text: "Em outubro você gastou R$ 85,00.",
+      period: "Outubro de 2026", // o mesmo rótulo de mês que a tela de Finanças usa
+      cards: [{ kind: "finance_month", month: "2026-10" }], // só a REFERÊNCIA ao cálculo; o app monta o card
+    });
     expect(run.failure).toBeUndefined();
     expect(run.toolsCalled).toEqual(["get_financial_summary"]);
     expect(provider.requests).toHaveLength(2);
@@ -167,9 +171,101 @@ describe("segurança", () => {
   });
 });
 
+describe("cards: referências que o app transforma em cartões", () => {
+  const week = { from: "2026-10-05", to: "2026-10-11" };
+
+  it("as referências NUNCA vão ao modelo: o payload das ferramentas é o mesmo de antes (zero token extra)", async () => {
+    const { run, provider } = await ask([
+      { toolCalls: [call("c1", "get_financial_summary", { month: "2026-10" })] },
+      { content: "ok" },
+    ]);
+    expect(run.reply?.cards).toHaveLength(1);
+    const sent = JSON.stringify(provider.requests);
+    expect(sent).not.toContain("finance_month");
+    expect(sent).not.toContain('"card');
+    const tool = provider.requests[1].messages.at(-1) as { content: string };
+    expect(Object.keys(JSON.parse(tool.content))).not.toContain("card");
+  });
+
+  it("várias ferramentas numa resposta geram um card cada, na ordem dos módulos (não na ordem das chamadas)", async () => {
+    const { run } = await ask([
+      { toolCalls: [call("a", "get_reading_summary", week), call("b", "get_workout_summary", week), call("c", "get_running_summary", week)] },
+      { content: "Sua semana." },
+    ], "Como foi minha semana?");
+    expect(run.reply?.cards).toEqual([
+      { kind: "workout_range", ...week },
+      { kind: "running_range", ...week },
+      { kind: "reading_range", ...week },
+    ]);
+  });
+
+  it("dois períodos do mesmo tipo: fica um card só, o do maior período", async () => {
+    const { run } = await ask([
+      { toolCalls: [call("a", "get_running_summary", week), call("b", "get_running_summary", { from: "2026-09-01", to: "2026-10-31" })] },
+      { content: "Comparando." },
+    ]);
+    expect(run.reply?.cards).toEqual([{ kind: "running_range", from: "2026-09-01", to: "2026-10-31" }]);
+  });
+
+  it("estudo filtrado por matéria leva o id da matéria; sem filtro, não", async () => {
+    const filtered = await ask([{ toolCalls: [call("a", "get_study_summary", { ...week, subject_name: "sql" })] }, { content: "ok" }]);
+    expect(filtered.run.reply?.cards).toEqual([{ kind: "study_range", ...week, subjectId: "s-sql" }]);
+    const all = await ask([{ toolCalls: [call("a", "get_study_summary", week)] }, { content: "ok" }]);
+    expect(all.run.reply?.cards).toEqual([{ kind: "study_range", ...week }]);
+  });
+
+  it("sem registros no período não há card (o texto basta)", async () => {
+    const { run } = await ask([{ toolCalls: [call("a", "get_financial_summary", { month: "2026-05" })] }, { content: "Sem lançamentos." }]);
+    expect(run.reply).toEqual({ text: "Sem lançamentos.", period: "Maio de 2026" });
+  });
+
+  it("ferramenta com erro não gera card", async () => {
+    const { run } = await ask([
+      { toolCalls: [call("a", "get_workout_summary", { from: "2026-10-11", to: "2026-10-05" })] },
+      { content: "Não consegui." },
+    ]);
+    expect(run.reply?.cards).toBeUndefined();
+  });
+
+  it("modelo falha DEPOIS de achar os números: texto fixo + cards, em vez de uma tela de erro", async () => {
+    for (const content of [null, "", "   "]) {
+      const { run } = await ask([{ toolCalls: [call("a", "get_workout_summary", week)] }, { content }]);
+      expect(run.failure).toBeUndefined();
+      expect(run.reply).toMatchObject({ text: CARDS_ONLY_TEXT, cards: [{ kind: "workout_range" }] });
+    }
+  });
+
+  it("laço de ferramentas esgotado, com cards: texto fixo + cards", async () => {
+    const loop: Step = { toolCalls: [call("x", "get_workout_summary", week)] };
+    const { run } = await ask([loop, loop, loop]);
+    expect(run.failure).toBeUndefined();
+    expect(run.reply).toMatchObject({ text: CARDS_ONLY_TEXT, cards: [{ kind: "workout_range" }] });
+  });
+
+  it("falha do provedor continua sendo falha (o gasto de tokens segue registrado)", async () => {
+    const provider = scripted([
+      { toolCalls: [call("a", "get_workout_summary", week)], usage: { inputTokens: 700, outputTokens: 40 } },
+      () => { throw new ProviderError("timeout", "detalhe"); },
+    ]);
+    const run = await runAssistant({ provider, data: sampleData(), today: TODAY, message: "oi", newId: () => "x", signal: AbortSignal.timeout(1000) });
+    expect(run.failure?.kind).toBe("timeout");
+    expect(run.reply).toBeUndefined();
+    expect(run.usage).toEqual({ inputTokens: 700, outputTokens: 40 });
+  });
+
+  it("proposta de lançamento nunca leva cards", async () => {
+    const { run } = await ask([
+      { toolCalls: [call("a", "get_financial_summary", { month: "2026-10" }), call("b", "propose_transaction", { type: "expense", amount_brl: 42 })] },
+    ]);
+    expect(run.reply?.proposal).toBeDefined();
+    expect(run.reply?.cards).toBeUndefined();
+  });
+});
+
 describe("limites e falhas", () => {
   it(`laço de ferramentas é interrompido após ${MAX_MODEL_CALLS} chamadas ao modelo`, async () => {
-    const loop: Step = { toolCalls: [call("x", "get_financial_summary", { month: "2026-10" })] };
+    // mês sem lançamentos: sem card, então não há o que mostrar e a falha continua sendo falha
+    const loop: Step = { toolCalls: [call("x", "get_financial_summary", { month: "2026-05" })] };
     const { run, provider } = await ask([loop, loop, loop, loop, loop]);
     expect(run.failure).toEqual({ kind: "too_many_steps", message: expect.any(String) });
     expect(provider.requests).toHaveLength(MAX_MODEL_CALLS);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { periodLabel, weekBuckets, type CardRef } from "@/domain/assistant-cards";
 import { expensesByCategory } from "@/domain/finance";
 import { formatBRL } from "@/domain/money";
 import { pagesInPeriod } from "@/domain/reading";
@@ -9,8 +10,8 @@ import { financeSummary } from "@/domain/summary";
 import type { TxProposal } from "@/domain/quick-entry";
 import type { TxType } from "@/domain/types";
 import { sessionsInPeriod } from "@/domain/workouts";
-import { addDays, daysBetween, isValidDateKey, monthPeriod, weekStart, type DateKey, type Period } from "@/lib/dates";
-import { formatDayShort, formatMinutes, formatMonthLabel } from "@/lib/format";
+import { daysBetween, isValidDateKey, monthPeriod, type DateKey, type Period } from "@/lib/dates";
+import { formatMinutes, formatMonthLabel } from "@/lib/format";
 import type { ToolDefinition } from "./provider";
 
 /**
@@ -31,7 +32,8 @@ export interface ToolContext {
 export type TransactionProposal = Omit<TxProposal, "id">;
 
 export type ToolOutcome =
-  | { kind: "result"; payload: unknown }
+  /** `card` é a REFERÊNCIA ao cálculo (para o app mostrar um card). Fica fora do `payload`: o modelo nunca a vê. */
+  | { kind: "result"; payload: unknown; card?: CardRef }
   | { kind: "proposal"; proposal: TransactionProposal }
   | { kind: "error"; message: string };
 
@@ -51,8 +53,6 @@ function checkRange(input: { from: DateKey; to: DateKey }): { period: Period } |
   if (daysBetween(input.from, input.to) + 1 > MAX_RANGE_DAYS) return { error: `Período longo demais: no máximo ${MAX_RANGE_DAYS} dias.` };
   return { period: { start: input.from, end: input.to } };
 }
-
-const periodLabel = (p: Period) => (p.start === p.end ? formatDayShort(p.start) : `${formatDayShort(p.start)} a ${formatDayShort(p.end)}`);
 
 /* ---------- propose_transaction ---------- */
 
@@ -121,6 +121,7 @@ function financialSummary(args: unknown, ctx: ToolContext): ToolOutcome {
         };
       }),
     },
+    ...(summary.count > 0 ? { card: { kind: "finance_month" as const, month } } : {}),
   };
 }
 
@@ -133,11 +134,7 @@ function workoutSummary(args: unknown, ctx: ToolContext): ToolOutcome {
 
   const sessions = sessionsInPeriod(ctx.data.sessions, period);
   // por semana (segunda a domingo), da mais antiga para a mais recente
-  const weeks: { weekStarting: DateKey; sessions: number }[] = [];
-  for (let day = weekStart(period.start); day <= period.end; day = addDays(day, 7)) {
-    const week = { start: day, end: addDays(day, 6) };
-    weeks.push({ weekStarting: day, sessions: sessionsInPeriod(sessions, week).length });
-  }
+  const weeks = weekBuckets(period).map((week) => ({ weekStarting: week.start, sessions: sessionsInPeriod(sessions, week).length }));
   return {
     kind: "result",
     payload: {
@@ -147,6 +144,7 @@ function workoutSummary(args: unknown, ctx: ToolContext): ToolOutcome {
       byWeek: weeks.slice(-53),
       note: "Só treinos de MUSCULAÇÃO finalizados contam. Corridas são outra coisa: use get_running_summary.",
     },
+    ...(sessions.length > 0 ? { card: { kind: "workout_range" as const, from: period.start, to: period.end } } : {}),
   };
 }
 
@@ -164,15 +162,14 @@ function runningSummary(args: unknown, ctx: ToolContext): ToolOutcome {
 
   const runs = runsInPeriod(ctx.data.runningSessions, period);
   const totals = runTotals(runs);
-  const weeks: { weekStarting: DateKey; runs: number; reportedDistanceText: string | null }[] = [];
-  for (let day = weekStart(period.start); day <= period.end; day = addDays(day, 7)) {
-    const week = runTotals(runsInPeriod(runs, { start: day, end: addDays(day, 6) }));
-    weeks.push({
-      weekStarting: day,
+  const weeks = weekBuckets(period).map((bucket) => {
+    const week = runTotals(runsInPeriod(runs, bucket));
+    return {
+      weekStarting: bucket.start,
       runs: week.runs,
       reportedDistanceText: week.hasDistance ? formatDistance(week.distanceMeters) : null,
-    });
-  }
+    };
+  });
   return {
     kind: "result",
     payload: {
@@ -185,6 +182,7 @@ function runningSummary(args: unknown, ctx: ToolContext): ToolOutcome {
       byWeek: weeks.slice(-53),
       note: "reportedDistanceText é a soma só das distâncias INFORMADAS; null = nenhuma corrida do período tem distância (total desconhecido, não zero). runsWithoutDistance corridas contam como corrida mas não somam km.",
     },
+    ...(runs.length > 0 ? { card: { kind: "running_range" as const, from: period.start, to: period.end } } : {}),
   };
 }
 
@@ -217,6 +215,10 @@ function studySummary(args: unknown, ctx: ToolContext): ToolOutcome {
       totalText: formatMinutes(total / 60),
       bySubject: rows.sort((a, b) => b.seconds - a.seconds).map((r) => ({ name: r.name, timeText: formatMinutes(r.seconds / 60) })),
     },
+    // Filtrar por matéria só vira card quando o nome aponta para UMA matéria (nomes repetidos: sem card, nunca um card errado).
+    ...(sessionCount > 0 && (!subject_name || subjects.length === 1)
+      ? { card: { kind: "study_range" as const, from: period.start, to: period.end, ...(subject_name ? { subjectId: subjects[0].id } : {}) } }
+      : {}),
   };
 }
 
@@ -242,6 +244,7 @@ function readingSummary(args: unknown, ctx: ToolContext): ToolOutcome {
       byBook,
       note: "Páginas lidas = página final − página inicial de cada sessão. A página em que o livro foi cadastrado não conta.",
     },
+    ...(inRange.length > 0 ? { card: { kind: "reading_range" as const, from: period.start, to: period.end } } : {}),
   };
 }
 

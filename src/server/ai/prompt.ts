@@ -43,7 +43,7 @@ export function systemPrompt(today: DateKey): string {
     ...dateAnchors(today).map((line) => `- ${line}`),
     "",
     "Regras:",
-    "- Responda em português do Brasil, de forma curta e direta.",
+    "- Responda em português do Brasil, em 1 a 3 frases. O app mostra ao usuário um cartão com os detalhes das ferramentas get_*_summary: destaque só o que responde à pergunta e não liste todos os itens. Não use tabelas nem títulos; pode usar **negrito** e listas com \"-\".",
     "- Para perguntas sobre os dados do usuário, use SEMPRE as ferramentas get_*_summary. Nunca invente números, valores, datas ou nomes.",
     "- Nos textos, copie os valores já formatados que as ferramentas devolvem (campos terminados em Text). Diga sempre o período consultado.",
     "- Se uma ferramenta devolver hasRecords=false, diga que não há registros no período. Isso é diferente de o valor ser zero.",

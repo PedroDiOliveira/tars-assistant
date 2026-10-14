@@ -762,7 +762,10 @@ try {
   };
 
   // pergunta sobre os dados: o "modelo" chama a ferramenta e redige a partir do resultado REAL do banco
+  const monthSP = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()).slice(0, 7);
+  const firstReply = pageA.waitForResponse((r) => r.url().endsWith("/api/assistant") && r.request().method() === "POST");
   await send("Quanto gastei este mês?");
+  const firstBody = await (await firstReply).json();
   await pageA.getByText(/despesas R\$\s[\d.,]+ e resultado/).waitFor({ timeout: 15000 });
   const answered = norm(await pageA.locator("main").innerText());
   check("Pergunta sobre os dados: resposta com os valores reais e o período consultado", /Em .* de \d{4}: despesas R\$\s[\d.,]+ e resultado R\$\s[\d.,]+\./.test(answered) && /Período: .* de \d{4}/.test(answered), answered.slice(-160));
@@ -772,6 +775,21 @@ try {
   check("O prompt traz a data de hoje do servidor e só as ferramentas permitidas", /\d{4}-\d{2}-\d{2}/.test(xai.received[0].body.messages[0].content) && xai.received[0].body.tools.map((t) => t.function.name).sort().join() === "get_financial_summary,get_reading_summary,get_running_summary,get_study_summary,get_workout_summary,propose_transaction");
   const afterQuestion = await usageNow();
   check("O uso foi contado no banco (1 pergunta, 1280 tokens: 2 chamadas)", afterQuestion.requests === 1 && afterQuestion.tokens === 1280, JSON.stringify(afterQuestion));
+
+  // card: o servidor manda só a REFERÊNCIA (tipo + mês); o app monta o card com os próprios dados
+  check("A resposta do servidor traz só a REFERÊNCIA do card (tipo e mês), sem números nem nomes", JSON.stringify(firstBody.reply.cards) === JSON.stringify([{ kind: "finance_month", month: monthSP }]), JSON.stringify(firstBody.reply));
+  check("O que o modelo recebeu NÃO inclui a referência do card (zero token extra)", !/finance_month|"cards"/.test(sentToModel));
+  const financeCard = pageA.getByRole("group", { name: /Resumo de Finanças/ });
+  await financeCard.waitFor({ timeout: 8000 });
+  const spentText = /despesas (R\$\s[\d.,]+) e resultado/.exec(answered)?.[1];
+  check("O card de Finanças é montado no app e mostra a MESMA despesa que o texto (valor do banco)", Boolean(spentText) && norm(await financeCard.innerText()).includes(norm(spentText)), String(spentText));
+  check("O card de Finanças diz o período e leva à tela de Finanças", /Período: .* de \d{4}/.test(norm(await financeCard.innerText())) && (await financeCard.getByRole("link", { name: /Abrir em Finanças/ }).getAttribute("href")) === "/financas");
+
+  await send("Quanto corri nesta semana?");
+  const runCard = pageA.getByRole("group", { name: /Resumo de Corrida/ });
+  await runCard.waitFor({ timeout: 15000 });
+  const runCardText = norm(await runCard.innerText());
+  check("Corrida: a pergunta sobre a semana mostra o card de Corrida (dados do banco), sem '0 km' inventado", /Período: /.test(runCardText) && /\d+ corridas?/.test(runCardText) && !/\b0 km\b/.test(runCardText), runCardText.slice(0, 200));
 
   // lançamento por texto: o assistente PROPÕE, nada é salvo antes de confirmar
   const aiTx = () => dbRows("select id, amount_cents::int as cents, source, occurred_on::text as day from public.transactions where source = 'ai'");
@@ -801,7 +819,9 @@ try {
   // falha do provedor: mensagem clara e caminho manual
   await send("FALHAR agora");
   await pageA.getByRole("button", { name: "Lançar manualmente" }).waitFor({ timeout: 15000 });
-  const failure = norm(await pageA.locator("main").innerText());
+  // Só a mensagem de falha (a última do assistente): a página inteira também mostra os cards das perguntas anteriores,
+  // com valores como "R$ 3.500,00", que não têm nada a ver com um código de erro HTTP.
+  const failure = norm(await pageA.locator("[id^='msg-']").last().innerText());
   check("Provedor com erro: mensagem clara, sem detalhes técnicos", /indisponível|Use o formulário/.test(failure) && !/500|erro interno simulado|xai-chave/.test(failure));
   await pageA.getByRole("button", { name: "Lançar manualmente" }).click();
   await pageA.waitForSelector("#tx-amount");

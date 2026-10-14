@@ -1,4 +1,5 @@
 import type { AssistantReply } from "@/domain/assistant";
+import { addCardRef, type CardRef } from "@/domain/assistant-cards";
 import type { AppData } from "@/domain/snapshot";
 import type { DateKey } from "@/lib/dates";
 import { systemPrompt } from "./prompt";
@@ -11,6 +12,8 @@ export const MAX_OUTPUT_TOKENS = 500;
 const MAX_REPLY_CHARS = 1500;
 
 export const PROPOSAL_TEXT = "Entendi assim. Confira e confirme para eu salvar — nada foi salvo ainda.";
+/** O modelo falhou, mas as ferramentas já acharam os números: o card fala por si, em vez de uma tela de erro. */
+export const CARDS_ONLY_TEXT = "Aqui estão os números que encontrei.";
 export const MULTIPLE_ENTRIES_TEXT = "Vi mais de um lançamento nessa mensagem. Envie um de cada vez para eu conseguir registrar certo.";
 
 export type AssistantFailureKind = ProviderErrorKind | "too_many_steps" | "empty_reply";
@@ -48,6 +51,12 @@ export async function runAssistant(input: AssistantInput): Promise<AssistantRun>
     { role: "user", content: message },
   ];
   let lastPeriod: string | undefined;
+  // Referências de card das ferramentas. Ficam só aqui e na resposta ao app: nunca entram nas mensagens do modelo.
+  let cards: CardRef[] = [];
+  const reply = (text: string): AssistantRun => ({
+    ...run,
+    reply: { text, ...(lastPeriod ? { period: lastPeriod } : {}), ...(cards.length > 0 ? { cards } : {}) },
+  });
 
   for (let call = 0; call < MAX_MODEL_CALLS; call++) {
     let result;
@@ -63,8 +72,11 @@ export async function runAssistant(input: AssistantInput): Promise<AssistantRun>
     const { content, toolCalls } = result.message;
     if (toolCalls.length === 0) {
       const text = content?.trim();
-      if (!text) return { ...run, failure: { kind: "empty_reply", message: "O assistente não devolveu resposta." } };
-      return { ...run, reply: { text: text.slice(0, MAX_REPLY_CHARS), ...(lastPeriod ? { period: lastPeriod } : {}) } };
+      if (!text) {
+        if (cards.length > 0) return reply(CARDS_ONLY_TEXT);
+        return { ...run, failure: { kind: "empty_reply", message: "O assistente não devolveu resposta." } };
+      }
+      return reply(text.slice(0, MAX_REPLY_CHARS));
     }
 
     run.toolsCalled.push(...toolCalls.map((c) => c.name));
@@ -83,6 +95,7 @@ export async function runAssistant(input: AssistantInput): Promise<AssistantRun>
       if (outcome.kind === "result") {
         const label = (outcome.payload as { period?: { label?: unknown } }).period?.label;
         if (typeof label === "string") lastPeriod = label;
+        if (outcome.card) cards = addCardRef(cards, outcome.card);
       }
       messages.push({
         role: "tool",
@@ -92,5 +105,6 @@ export async function runAssistant(input: AssistantInput): Promise<AssistantRun>
     }
   }
 
+  if (cards.length > 0) return reply(CARDS_ONLY_TEXT);
   return { ...run, failure: { kind: "too_many_steps", message: "O assistente não conseguiu concluir." } };
 }

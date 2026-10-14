@@ -6,6 +6,7 @@ import {
   weekPeriod,
   weekStart,
   type DateKey,
+  type Period,
 } from "@/lib/dates";
 import {
   formatDayShort,
@@ -13,6 +14,7 @@ import {
   formatMonthLabel,
   pluralize,
 } from "@/lib/format";
+import type { CardRef, RangeRef } from "./assistant-cards";
 import { expensesByCategory, monthSummary } from "./finance";
 import { formatBRL } from "./money";
 import type { TxProposal } from "./quick-entry";
@@ -28,7 +30,14 @@ export interface AssistantReply {
   period?: string;
   /** lançamento proposto: só é salvo quando o usuário confirma na tela */
   proposal?: TxProposal;
+  /**
+   * Referências aos cálculos que o texto resume. O app monta os cards a partir delas, com os próprios dados: aqui não
+   * há números nem nomes, só tipo e período. Opcional, então versões antigas do app continuam funcionando.
+   */
+  cards?: CardRef[];
 }
+
+const rangeRef = (kind: RangeRef["kind"], period: Period): RangeRef => ({ kind, from: period.start, to: period.end });
 
 function normalize(text: string): string {
   return text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
@@ -77,6 +86,7 @@ export function answerQuestion(question: string, data: DataSnapshot, today: Date
       return {
         text: `Você gastou ${formatBRL(entry.cents)} com ${category.name} em ${period} (${entry.count} ${pluralize(entry.count, "lançamento", "lançamentos")}).`,
         period,
+        cards: [{ kind: "finance_month", month }],
       };
     }
     const summary = monthSummary(data.transactions, month);
@@ -86,6 +96,7 @@ export function answerQuestion(question: string, data: DataSnapshot, today: Date
         data.categories.find((c) => c.id === spend[0]?.categoryId)?.name ?? "—"
       } (${formatBRL(spend[0]?.cents ?? 0)}).`,
       period,
+      cards: [{ kind: "finance_month", month }],
     };
   }
 
@@ -108,7 +119,11 @@ export function answerQuestion(question: string, data: DataSnapshot, today: Date
       `Leitura: ${read} ${pluralize(read, "página", "páginas")}.`,
       `Gastos: ${formatBRL(spent)}.`,
     ];
-    return { text: `Sua ${period}:\n${lines.join("\n")}`, period };
+    return {
+      text: `Sua ${period}:\n${lines.join("\n")}`,
+      period,
+      cards: [rangeRef("workout_range", wk), rangeRef("running_range", wk), { kind: "study_range", from: wk.start, to: wk.end }, rangeRef("reading_range", wk)],
+    };
   }
 
   if (/quanto corri|quantos? (km|quilometros)|quantas (vezes|corridas) corri|minhas corridas/.test(q)) {
@@ -118,7 +133,7 @@ export function answerQuestion(question: string, data: DataSnapshot, today: Date
     const range = weekly ? weekPeriod(today) : monthPeriod(month);
     const totals = runTotals(runsInPeriod(data.runningSessions, range));
     if (totals.runs === 0) return { text: `Não há corridas registradas (${period}).`, period };
-    return { text: `Corrida (${period}): ${describeRuns(totals)}.`, period };
+    return { text: `Corrida (${period}): ${describeRuns(totals)}.`, period, cards: [rangeRef("running_range", range)] };
   }
 
   if (/quantas vezes (treinei|fiz musculacao)/.test(q)) {
@@ -134,6 +149,7 @@ export function answerQuestion(question: string, data: DataSnapshot, today: Date
     return {
       text: `Você fez musculação ${total} ${pluralize(total, "vez", "vezes")} nas ${period}. Da mais recente para a mais antiga: ${weeks.join(", ")}.`,
       period,
+      cards: [rangeRef("workout_range", { start, end })],
     };
   }
 
@@ -154,6 +170,7 @@ export function answerQuestion(question: string, data: DataSnapshot, today: Date
     return {
       text: `Você estudou ${formatMinutes(seconds / 60)} de ${label} (${period}), em ${sessions.length} ${pluralize(sessions.length, "sessão", "sessões")}.`,
       period,
+      cards: [{ kind: "study_range", from: range.start, to: range.end, ...(subject ? { subjectId: subject.id } : {}) }],
     };
   }
 
@@ -172,6 +189,7 @@ export function answerQuestion(question: string, data: DataSnapshot, today: Date
           ? `${least.s.name} ainda não tem nenhum estudo registrado nesta semana.`
           : `${least.s.name} é a matéria com menos tempo nesta semana: ${formatMinutes(least.seconds / 60)}.`,
       period,
+      cards: [{ kind: "study_range", from: wk.start, to: wk.end }],
     };
   }
 
@@ -181,6 +199,7 @@ export function answerQuestion(question: string, data: DataSnapshot, today: Date
     return {
       text: `Você leu ${reading.pages} ${pluralize(reading.pages, "página", "páginas")} nesta semana${reading.target ? ` (meta ${reading.target})` : ""}.`,
       period,
+      cards: [rangeRef("reading_range", weekPeriod(today))],
     };
   }
 

@@ -23,7 +23,13 @@ export interface RunningWeekText {
   showProgress: boolean;
 }
 
-export function runningWeekText(week: RunningWeekSummary): RunningWeekText {
+/** O que a redação precisa do resumo: o card do assistente monta isto para qualquer período, não só para a semana. */
+export type RunningWeekTextInput = Pick<
+  RunningWeekSummary,
+  "runs" | "activeDays" | "distanceMeters" | "runsWithoutDistance" | "hasDistance" | "targetMeters" | "remainingMeters"
+>;
+
+export function runningWeekText(week: RunningWeekTextInput): RunningWeekText {
   const { runs, activeDays, distanceMeters, runsWithoutDistance, hasDistance, targetMeters, remainingMeters } = week;
 
   const countsLine =

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildCard, type CardRef } from "@/domain/assistant-cards";
 import { financeSummary } from "@/domain/summary";
 import { runTool, TOOL_DEFINITIONS, type ToolOutcome } from "./tools";
 import { sampleData, TODAY } from "./fixtures";
@@ -229,5 +230,102 @@ describe("runTool", () => {
     expect(TOOL_DEFINITIONS.map((t) => t.name).sort()).toEqual([
       "get_financial_summary", "get_reading_summary", "get_running_summary", "get_study_summary", "get_workout_summary", "propose_transaction",
     ]);
+  });
+});
+
+describe("referências de card", () => {
+  const week = { from: "2026-10-05", to: "2026-10-11" };
+  const cardOf = (o: ToolOutcome): CardRef | undefined => (o.kind === "result" ? o.card : undefined);
+  const built = (o: ToolOutcome) => {
+    const ref = cardOf(o);
+    if (!ref) throw new Error("esperava uma referência de card");
+    const card = buildCard(ctx.data, ref, { today: TODAY });
+    if (!card) throw new Error("esperava um card");
+    return card;
+  };
+
+  it("cada resumo com registros devolve a referência, e ela fica FORA do payload que vai ao modelo", () => {
+    const outcomes = [
+      run("get_financial_summary", { month: "2026-10" }),
+      run("get_workout_summary", week),
+      run("get_running_summary", week),
+      run("get_study_summary", week),
+      run("get_reading_summary", week),
+    ];
+    expect(outcomes.map((o) => cardOf(o)?.kind)).toEqual(["finance_month", "workout_range", "running_range", "study_range", "reading_range"]);
+    for (const o of outcomes) {
+      expect(Object.keys(result(o))).not.toContain("card");
+      expect(JSON.stringify(result(o))).not.toContain("_range");
+    }
+  });
+
+  it("sem registros ou com erro: nenhuma referência", () => {
+    expect(cardOf(run("get_financial_summary", { month: "2026-05" }))).toBeUndefined();
+    expect(cardOf(run("get_workout_summary", { from: "2026-01-01", to: "2026-01-31" }))).toBeUndefined();
+    expect(cardOf(run("get_running_summary", { from: "2026-10-11", to: "2026-10-05" }))).toBeUndefined();
+    expect(cardOf(run("propose_transaction", { type: "expense", amount_brl: 10 }))).toBeUndefined();
+  });
+
+  it("a referência repete exatamente o período já validado da ferramenta", () => {
+    expect(cardOf(run("get_financial_summary", { month: "2026-10" }))).toEqual({ kind: "finance_month", month: "2026-10" });
+    expect(cardOf(run("get_workout_summary", week))).toEqual({ kind: "workout_range", ...week });
+  });
+
+  it("estudo: só vira card filtrado quando o nome aponta para UMA matéria; nome repetido = sem card, nunca um card errado", () => {
+    expect(cardOf(run("get_study_summary", { ...week, subject_name: "SQL" }))).toEqual({ kind: "study_range", ...week, subjectId: "s-sql" });
+    const twins = sampleData({ subjects: [{ id: "a", name: "Cálculo", hue: 100 }, { id: "b", name: "calculo", hue: 110 }], studySessions: [{ id: "x", subjectId: "a", source: "manual", occurredOn: "2026-10-06", durationSeconds: 600 }] });
+    expect(cardOf(run("get_study_summary", { ...week, subject_name: "calculo" }, { data: twins, today: TODAY }))).toBeUndefined();
+    expect(cardOf(run("get_study_summary", week, { data: twins, today: TODAY }))?.kind).toBe("study_range");
+  });
+
+  // Contrato: o que o modelo lê (payload) e o que o usuário vê (card) saem das mesmas contas.
+  describe("contrato com o payload", () => {
+    it("finanças: despesas e categorias iguais", () => {
+      const out = run("get_financial_summary", { month: "2026-10" });
+      const payload = result(out);
+      const card = built(out);
+      expect(card.headline.value).toBe(payload.expenseText);
+      expect(card.rows.map((r) => [r.label, r.valueText])).toEqual(payload.topExpenseCategories.map((c: { name: string; spentText: string }) => [c.name, c.spentText]));
+    });
+
+    it("musculação: total e semanas iguais", () => {
+      const out = run("get_workout_summary", { from: "2026-09-28", to: "2026-10-11" });
+      const payload = result(out);
+      const card = built(out);
+      expect(Number(card.headline.value)).toBe(payload.sessionsCompleted);
+      expect(card.series?.items.map((i) => i.value)).toEqual(payload.byWeek.map((w: { sessions: number }) => w.sessions));
+    });
+
+    it("corrida: corridas e distância informada iguais (e sem distância continua sem distância)", () => {
+      const out = run("get_running_summary", { from: "2026-09-28", to: "2026-10-11" });
+      const payload = result(out);
+      const card = built(out);
+      expect(card.headline.notes[0]).toContain(`${payload.runs} corridas`);
+      expect(`${card.headline.value} ${card.headline.unit}`).toBe(payload.reportedDistanceText);
+      expect(card.headline.notes.join("|")).toContain(`${payload.runsWithoutDistance} corrida sem distância`);
+
+      const noDistance = { data: sampleData({ runningSessions: [{ id: "r", occurredOn: "2026-10-07" }] }), today: TODAY };
+      const out2 = run("get_running_summary", week, noDistance);
+      expect(result(out2).reportedDistanceText).toBeNull();
+      const card2 = buildCard(noDistance.data, cardOf(out2)!, { today: TODAY })!;
+      expect(card2.headline.unit).not.toBe("km");
+      expect(card2.headline.notes).toContain("Distância não preenchida");
+    });
+
+    it("estudo: total e tempo por matéria iguais", () => {
+      const out = run("get_study_summary", week);
+      const payload = result(out);
+      const card = built(out);
+      expect(card.headline.value).toBe(payload.totalText);
+      expect(card.rows.map((r) => [r.label, r.valueText])).toEqual(payload.bySubject.map((s: { name: string; timeText: string }) => [s.name, s.timeText]));
+    });
+
+    it("leitura: páginas e livros iguais", () => {
+      const out = run("get_reading_summary", week);
+      const payload = result(out);
+      const card = built(out);
+      expect(Number(card.headline.value)).toBe(payload.pagesRead);
+      expect(card.rows.map((r) => r.label)).toEqual(payload.byBook.map((b: { title: string }) => b.title));
+    });
   });
 });

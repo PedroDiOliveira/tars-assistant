@@ -13,6 +13,14 @@ const categories: Category[] = [
 const today = "2026-10-06";
 
 describe("lançamento por texto (simulação local)", () => {
+  it("pergunta sobre os números não é lançamento (“Quanto gastei…?” não pede valor)", () => {
+    for (const question of ["Quanto gastei com alimentação este mês?", "quantos reais gastei esta semana", "Qual categoria eu mais gastei?", "Como foi o que gastei ontem?"]) {
+      expect(parseQuickEntry(question, today, categories), question).toEqual({ kind: "none" });
+    }
+    // a afirmação continua sendo lançamento
+    expect(parseQuickEntry("Gastei 42 reais no Outback", today, categories).kind).toBe("proposal");
+  });
+
   it("“Gastei 42 reais no Outback ontem” vira despesa de R$ 42 ontem em Alimentação", () => {
     const result = parseQuickEntry("Gastei 42 reais no Outback ontem", today, categories);
     expect(result).toEqual({

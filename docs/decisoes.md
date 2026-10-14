@@ -107,3 +107,17 @@ A área da navegação inferior que era "Treino" passou a se chamar **Exercício
 - **Home.** "Esta semana" separa Musculação, Corrida, Estudo e Leitura; os atalhos continuam sendo quatro ("Treinar" virou "Musculação"). O aviso de corrida é objetivo ("Faltam 4 km para sua meta semanal…"), nunca uma recomendação de treino, e não afirma quanto falta quando só há corridas sem distância.
 - **Assistente.** Ganhou `get_running_summary` (mesmo cálculo da tela, distância informada x desconhecida) e as instruções dizem que "treinos" de musculação e corridas são coisas separadas. Ele **não** registra corridas: o registro por linguagem natural fica para depois.
 - **Fora da primeira versão:** GPS e mapas, rastreamento em tempo real, cronômetro de corrida, relógios e serviços esportivos, planos, metas de frequência, recordes e novas modalidades.
+
+## Respostas do assistente: texto formatado e cards
+
+O assistente respondia com texto puro (`whitespace-pre-line`), o que escondia números e listas num bloco difícil de ler. Agora a resposta é um texto curto e formatado, mais um **card** por assunto com os detalhes (número principal, meta, barras por dia ou semana, lista por categoria, matéria ou livro) e um link para a tela do módulo.
+
+- **O modelo não desenha nada.** Ele só escreve `text`. Quem decide haver card é a ferramenta que achou registros (`get_*_summary`), e o card é montado no app a partir de uma referência (ver decisão 25 em [arquitetura-backend.md](arquitetura-backend.md)). Por isso não há custo extra de API nem de banco; o prompt passou a pedir 1 a 3 frases (o card carrega o resto), o que reduz os tokens de saída.
+- **Sem registros, sem card.** Um card de zeros contradiria o texto "sem registros" (`hasRecords=false` não é o mesmo que zero).
+- **Um card por tipo.** Se o modelo consultar dois períodos do mesmo assunto, vale o maior; a ordem é a de sempre do app (Finanças, Musculação, Corrida, Estudos, Leitura). Com três ou mais cards a resposta vira uma lista compacta, no mesmo molde do bloco "Esta semana" da Home.
+- **Foco decidido no cliente.** Em "Quanto gastei com alimentação?" o card mostra o mês e destaca a categoria citada, em vez de acrescentar um parâmetro à ferramenta (que custaria tokens em toda chamada).
+- **Corrida mantém a regra do projeto:** distância informada x desconhecida, nunca "0 km" quando a distância não foi preenchida (mesma redação de `running-text.ts`, inclusive na descrição falada das barras).
+- **Congelado ao chegar.** O card é montado quando a resposta chega e não muda depois, mesmo que os dados mudem.
+- **A conversa mora só na memória do navegador** (store zustand, sem localStorage nem banco): tocar num link do card e voltar não zera o chat, recarregar apaga, e sair da conta recarrega a página de propósito. Persistir o histórico exigiria tabela, RLS e retenção, e fica fora do escopo.
+- **Texto do modelo é entrada não confiável.** O renderizador próprio (`lib/reply-text.ts`) só entende parágrafos, **negrito** e listas; tabelas viram linhas "a · b", títulos viram negrito, links viram só o texto, e tudo é desenhado como nó de texto do React (nunca HTML). Sem dependência nova.
+- **Falha do modelo depois de achar os números** (resposta vazia ou laço de ferramentas esgotado) devolve um texto fixo mais os cards, em vez de uma tela de erro. Timeout, limite e falhas de infraestrutura continuam sendo erro, e o gasto de tokens segue registrado.

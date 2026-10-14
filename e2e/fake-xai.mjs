@@ -7,6 +7,7 @@
  *   - mensagem de ferramenta   -> redige a resposta final a partir do resultado da ferramenta
  *   - contém "FALHAR"          -> HTTP 500
  *   - contém "VARIOS"          -> duas propostas de lançamento (o app deve pedir um de cada vez)
+ *   - contém "quanto corri"    -> get_running_summary da semana de hoje (intervalo lido das datas do prompt)
  *   - contém "quanto gastei"   -> get_financial_summary do mês de hoje (testado ANTES de "gastei", que ele contém)
  *   - contém "gastei"          -> propose_transaction (valor = primeiro número; "ontem" resolvido pela data do prompt)
  *   - qualquer outra coisa     -> pergunta o que faltou
@@ -36,6 +37,7 @@ export async function startFakeXai({ port = 54398, apiKey = "xai-chave-de-teste"
       if (result.expenseText !== undefined) {
         return { content: `Em ${result.period.label}: despesas ${result.expenseText} e resultado ${result.resultText}.` };
       }
+      if (result.runs !== undefined) return { content: `Corrida: ${result.runs} em ${result.period.label}.` };
       return { content: "Aqui está o resumo do período." };
     }
 
@@ -49,6 +51,10 @@ export async function startFakeXai({ port = 54398, apiKey = "xai-chave-de-teste"
           toolCall("b", "propose_transaction", { type: "expense", amount_brl: 20 }),
         ],
       };
+    }
+    if (lower.includes("quanto corri")) {
+      const week = /esta semana \(segunda a domingo\): from=(\d{4}-\d{2}-\d{2}) to=(\d{4}-\d{2}-\d{2})/.exec(system);
+      return { tool_calls: [toolCall("r1", "get_running_summary", { from: week?.[1] ?? today, to: week?.[2] ?? today })] };
     }
     if (lower.includes("quanto gastei")) {
       return { tool_calls: [toolCall("f1", "get_financial_summary", { month: today.slice(0, 7) })] };

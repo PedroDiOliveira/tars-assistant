@@ -1,9 +1,6 @@
-import type { AssistantReply } from "@/domain/assistant";
+import { parseAssistantReply } from "@/domain/assistant-reply";
 import { fail, ok, type AssistantApi, type FailureCode } from "../contract";
 import { goToLogin } from "./query";
-
-const REPLY_SHAPE = (value: unknown): value is { reply: AssistantReply } =>
-  typeof value === "object" && value !== null && typeof (value as { reply?: { text?: unknown } }).reply?.text === "string";
 
 /** Pergunta ao assistente no servidor. Nunca lança: toda falha vira uma mensagem em português para a tela. */
 export const remoteAssistant: AssistantApi = {
@@ -22,7 +19,8 @@ export const remoteAssistant: AssistantApi = {
     }
 
     const body: unknown = await response.json().catch(() => null);
-    if (response.ok && REPLY_SHAPE(body)) return ok(body.reply);
+    const reply = response.ok ? parseAssistantReply((body as { reply?: unknown } | null)?.reply) : null;
+    if (reply) return ok(reply);
 
     if (response.status === 401) {
       goToLogin();
