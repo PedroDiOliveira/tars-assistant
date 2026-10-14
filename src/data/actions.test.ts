@@ -134,6 +134,54 @@ describe("lançamentos e entidades simples", () => {
   });
 });
 
+describe("corrida", () => {
+  it("usa o id do formulário e o relógio do host (nowMs) no comando", async () => {
+    const { host, dispatched } = makeHost();
+    const result = await createDataActions(host).addRunningSession({ id: "form-1", occurredOn: "2026-10-07", distanceMeters: 5200 });
+    expect(result).toEqual(ok({ id: "form-1" }));
+    expect(dispatched[0]).toEqual({ type: "running.addSession", nowMs: NOW, session: { id: "form-1", occurredOn: "2026-10-07", distanceMeters: 5200 } });
+  });
+
+  it("sem id informado, gera um (e o devolve)", async () => {
+    const { host, dispatched } = makeHost();
+    const result = await createDataActions(host).addRunningSession({ occurredOn: "2026-10-07" });
+    expect(result).toEqual(ok({ id: "id-1" }));
+    expect(dispatched[0]).toMatchObject({ session: { id: "id-1", occurredOn: "2026-10-07" } });
+  });
+
+  it("nova tentativa depois de uma falha (ou de uma resposta perdida) reenvia o MESMO id: nunca duplica", async () => {
+    const { host, dispatched, respondWith } = makeHost();
+    const actions = createDataActions(host);
+    const input = { id: "form-1", occurredOn: "2026-10-07", distanceMeters: 5000 };
+
+    respondWith(async () => fail("Sem conexão com o servidor. Nada foi salvo.", "offline"));
+    expect(await actions.addRunningSession(input)).toMatchObject({ ok: false, code: "offline" });
+    respondWith(async () => ok<Outcome>("saved"));
+    expect(await actions.addRunningSession(input)).toEqual(ok({ id: "form-1" }));
+
+    const ids = dispatched.map((c) => (c.type === "running.addSession" ? c.session.id : null));
+    expect(ids).toEqual(["form-1", "form-1"]);
+  });
+
+  it("propaga a recusa de data futura sem inventar sucesso", async () => {
+    const { host, respondWith } = makeHost();
+    respondWith(async () => fail("Não é possível registrar uma corrida em uma data futura.", "validation"));
+    const result = await createDataActions(host).addRunningSession({ id: "f", occurredOn: "2026-10-09" });
+    expect(result).toMatchObject({ ok: false, code: "validation", error: "Não é possível registrar uma corrida em uma data futura." });
+  });
+
+  it("editar e excluir mandam o id da corrida; editar leva o relógio", async () => {
+    const { host, dispatched } = makeHost();
+    const actions = createDataActions(host);
+    expect(await actions.updateRunningSession("r1", { occurredOn: "2026-10-06" })).toEqual(ok());
+    expect(await actions.deleteRunningSession("r1")).toEqual(ok());
+    expect(dispatched).toEqual([
+      { type: "running.updateSession", id: "r1", fields: { occurredOn: "2026-10-06" }, nowMs: NOW },
+      { type: "running.deleteSession", id: "r1" },
+    ]);
+  });
+});
+
 describe("encerrar o treino", () => {
   it("sem rascunho: 'none', sem chamar o servidor", async () => {
     const { host, dispatched } = makeHost();

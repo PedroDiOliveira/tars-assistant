@@ -13,7 +13,7 @@ describe("migrações", () => {
     );
     expect(tables.map((r) => r.tablename)).toEqual([
       "ai_rate", "ai_usage", "books", "categories", "exercise_sets", "exercises", "goals", "profiles",
-      "reading_sessions", "session_exercises", "study_sessions", "study_subjects", "study_timers", "transactions",
+      "reading_sessions", "running_sessions", "session_exercises", "study_sessions", "study_subjects", "study_timers", "transactions",
       "tx_templates", "workout_plan_exercises", "workout_plans", "workout_sessions",
     ]);
   });

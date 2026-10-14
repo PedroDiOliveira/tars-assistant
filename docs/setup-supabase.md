@@ -42,6 +42,23 @@ o cadeado do RLS ativo.
 > Alternativa sem o CLI: `psql "<string de conexão do painel>" -f supabase/migrations/<arquivo>.sql`, um arquivo
 > por vez, na ordem do nome. O CLI é melhor porque registra o que já foi aplicado.
 
+### Atualizar um projeto que já está em uso (ordem de implantação)
+
+Cada versão do app novo pode vir com migrações novas. A regra é sempre a mesma: **aplique a migração primeiro e publique o app depois**.
+As migrações são aditivas, então o app antigo continua funcionando com o banco já atualizado; o contrário (app novo com o banco antigo) não funciona, e o app diz isso em vez de mostrar dado pela metade.
+
+Exemplo, a versão com **Corrida** (`supabase/migrations/20261014000013_running.sql`):
+
+1. `npm run db:push` (ou `npx supabase db push --dry-run` antes, para ver o que será aplicado). A migração cria `running_sessions` (com RLS e permissões), acrescenta o valor `running_meters` ao tipo `goal_kind` e substitui `apply_command` e `get_snapshot`.
+2. Só então publique o app (deploy na Vercel).
+
+O que acontece se a ordem for trocada ou se for preciso voltar atrás:
+
+- **App novo antes da migração:** `get_snapshot()` ainda não devolve `runningSessions`, e o app recusa abrir, com a mensagem "O banco ainda não tem a atualização de Corrida. Aplique a migração 20261014000013_running e recarregue.", em vez de abrir sem as corridas. Aplicar a migração resolve, sem perda de dados. (Atenção: um servidor de desenvolvimento com o `.env.local` em modo live fala com o banco real, então ele também mostra essa mensagem até a migração ser aplicada.)
+- **App antigo com a migração aplicada:** funciona normalmente, enquanto não existir uma meta de corrida. O schema do snapshot da versão antiga valida o tipo de meta e **recusaria** `running_meters`; como só o app novo cria essa meta, o risco é só um *rollback do app depois de alguém ter definido uma meta de corrida*. Nesse caso, antes de voltar atrás, apague as metas de corrida (`delete from public.goals where kind = 'running_meters';`) ou prefira corrigir para frente.
+- A migração **não é reversível por um `down`**: remover um valor de enum não é suportado pelo Postgres. As corridas ficam na tabela própria e o resto do app não depende delas.
+- `ALTER TYPE … ADD VALUE` roda dentro da transação da migração; o valor novo só é *usado* depois do commit (as funções o comparam em tempo de execução), por isso nada na migração o referencia como literal.
+
 ## 4. Criar o seu usuário e fechar o cadastro
 
 O app é de um dono só: **não existe tela de cadastro**.
@@ -108,3 +125,4 @@ pg_dump "<string de conexão>" --schema=public --no-owner > tars-backup.sql
   funções do banco e quebra se aparecer uma nova aberta por engano.
 - **Um cronômetro por vez:** a chave primária de `study_timers` é o usuário.
 - **Paridade com o TypeScript:** `npm run db:test` roda cada comando no reducer e no banco e exige estados iguais.
+- **Data futura recusada no banco:** uma corrida (`running_sessions`) não pode estar no futuro; o gatilho usa o relógio e o fuso do servidor, nunca o horário enviado pelo app.

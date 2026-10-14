@@ -6,6 +6,7 @@ import type {
   ExerciseFields,
   PlanInput,
   ReadingSessionFields,
+  RunningSessionFields,
   StudySessionFields,
   SubjectFields,
   TransactionFields,
@@ -17,6 +18,7 @@ import type {
   Exercise,
   GoalKind,
   ReadingSession,
+  RunningSession,
   SetLog,
   StudySession,
   Transaction,
@@ -69,6 +71,13 @@ export type NewTransaction = Omit<Transaction, "id" | "source"> & {
   id?: string;
 };
 export type NewStudySession = Omit<StudySession, "id" | "source"> & { source?: StudySession["source"] };
+export type NewRunningSession = Omit<RunningSession, "id"> & {
+  /**
+   * Id da corrida, gerado UMA vez quando o formulário abre e reenviado em cada nova tentativa. É ele que faz uma
+   * resposta perdida (o servidor salvou, o celular não soube) não duplicar o registro ao tentar de novo.
+   */
+  id?: string;
+};
 
 export interface GoalInput {
   kind: GoalKind;
@@ -129,6 +138,12 @@ export interface DataActions {
   addReadingSession(input: Omit<ReadingSession, "id">): Promise<Result>;
   updateReadingSession(id: string, fields: ReadingSessionFields): Promise<Result>;
   deleteReadingSession(id: string): Promise<Result>;
+  /* corrida */
+  /** Falha com `code: "validation"` quando a data é futura. Repetir o mesmo `id` nunca duplica. */
+  addRunningSession(input: NewRunningSession): Promise<Result<{ id: string }>>;
+  /** Substitui os campos editáveis: distância, duração ou observação omitidas voltam a "não informado". */
+  updateRunningSession(id: string, fields: RunningSessionFields): Promise<Result>;
+  deleteRunningSession(id: string): Promise<Result>;
 }
 
 /**

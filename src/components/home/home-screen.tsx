@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Dumbbell,
+  Footprints,
   GraduationCap,
   Info,
   Plus,
@@ -24,8 +25,15 @@ import { ReadingSessionSheet } from "@/components/reading/reading-session-sheet"
 import { StudyStartSheet } from "@/components/studies/study-start-sheet";
 import { buildAttention, type AttentionItem, type AttentionTone } from "@/domain/attention";
 import { formatBRL, formatBRLCompact } from "@/domain/money";
+import { runningWeekText } from "@/domain/running-text";
 import { isTimerRunning, timerElapsedSeconds } from "@/domain/studies";
-import { financeSummary, readingWeekSummary, studyWeekSummary, workoutSummary } from "@/domain/summary";
+import {
+  financeSummary,
+  readingWeekSummary,
+  runningWeekSummary,
+  studyWeekSummary,
+  workoutSummary,
+} from "@/domain/summary";
 import { useData, useDisplayName, useDraft, useNow, useTimer, useToday } from "@/data";
 import { hourFromInstant, monthOf } from "@/lib/dates";
 import {
@@ -62,6 +70,8 @@ function HomeScreenContent() {
   const month = monthOf(today);
   const finance = useMemo(() => financeSummary(data, month), [data, month]);
   const workout = useMemo(() => workoutSummary(data, today), [data, today]);
+  const running = useMemo(() => runningWeekSummary(data, today), [data, today]);
+  const runningText = useMemo(() => runningWeekText(running), [running]);
   const study = useMemo(() => studyWeekSummary(data, today), [data, today]);
   const reading = useMemo(() => readingWeekSummary(data, today), [data, today]);
   // Só o essencial: no máximo dois avisos na abertura.
@@ -122,7 +132,7 @@ function HomeScreenContent() {
         <QuickAction
           module="workout"
           icon={Dumbbell}
-          label={draft ? "Continuar" : "Treinar"}
+          label={draft ? "Continuar" : "Musculação"}
           href={draft ? "/treino/sessao" : "/treino"}
         />
         <QuickAction
@@ -142,7 +152,7 @@ function HomeScreenContent() {
           className="flex min-h-12 items-center gap-2 rounded-2xl bg-m-soft px-4 text-sm font-medium text-m-ink"
         >
           <Dumbbell className="size-4" aria-hidden />
-          Treino em andamento: {draft.nameSnapshot}
+          Treino de musculação em andamento: {draft.nameSnapshot}
         </Link>
       ) : null}
       {timer ? <TimerBanner /> : null}
@@ -155,11 +165,22 @@ function HomeScreenContent() {
             href="/treino"
             module="workout"
             icon={Dumbbell}
-            label="Treino"
+            label="Musculação"
             value={workout.target ? `${workout.done} de ${workout.target}` : String(workout.done)}
             unit={workout.target ? undefined : pluralize(workout.done, "treino", "treinos")}
             ratio={workout.ratio}
-            progressLabel={`Treinos: ${workout.done} de ${workout.target ?? "sem meta"} nesta semana`}
+            progressLabel={`Treinos de musculação: ${workout.done} de ${workout.target ?? "sem meta"} nesta semana`}
+          />
+          <MetricRow
+            href="/treino/corrida"
+            module="running"
+            icon={Footprints}
+            label="Corrida"
+            value={runningText.value}
+            unit={runningText.unit}
+            ratio={running.ratio}
+            progressLabel="Progresso da meta semanal de distância de corrida"
+            note={runningText.missingLine ?? (running.runs > 0 && !running.hasDistance ? "Distância não preenchida" : null)}
           />
           <MetricRow
             href="/estudos"

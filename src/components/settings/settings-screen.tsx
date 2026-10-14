@@ -16,6 +16,7 @@ import { Surface } from "@/components/shared/surface";
 import { SubHeader } from "@/components/layout/sub-header";
 import { activeOnly } from "@/domain/catalog";
 import { goalFor } from "@/domain/goals";
+import { formatDistance } from "@/domain/running";
 import { formatBRL, formatBRLCompact } from "@/domain/money";
 import type { Goal, GoalKind } from "@/domain/types";
 import { signOut, useAccount, useActions, useData, useDraft, useTemplates, useToday } from "@/data";
@@ -127,7 +128,8 @@ function SettingsScreenContent() {
           </SectionTitle>
           <Surface className="divide-y divide-border/70 overflow-hidden">
             {goalRow("savings", null, "Economia por mês", formatBRLCompact, "Meta de economia mensal")}
-            {goalRow("workout_sessions", null, "Treinos por semana", (t) => `${t}`, "Meta semanal de treino")}
+            {goalRow("workout_sessions", null, "Treinos de musculação por semana", (t) => `${t}`, "Meta semanal de musculação")}
+            {goalRow("running_meters", null, "Corrida por semana (km)", formatDistance, "Meta semanal de corrida")}
             {goalRow("study_minutes", null, "Estudo por semana (geral)", formatMinutes, "Meta semanal de estudo")}
             {goalRow("reading_pages", null, "Leitura por semana", (t) => `${t} págs.`, "Meta semanal de leitura")}
           </Surface>

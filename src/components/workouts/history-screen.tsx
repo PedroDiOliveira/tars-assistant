@@ -26,7 +26,7 @@ function HistoryScreenContent() {
 
   return (
     <div data-module="workout" className="pb-8">
-      <SubHeader title="Histórico de treinos" backHref="/treino" />
+      <SubHeader title="Histórico de musculação" backHref="/treino" backLabel="Voltar para Musculação" />
       <div className="space-y-3 px-4 pt-2">
         {sessions.length === 0 ? (
           <EmptyState

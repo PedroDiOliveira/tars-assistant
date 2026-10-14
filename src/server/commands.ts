@@ -35,6 +35,11 @@ export async function executeCommand(client: RpcClient, raw: unknown): Promise<R
   return ok(outcome);
 }
 
+/** Um snapshot de antes da corrida: tem o resto (relógio do servidor, categorias...), mas não `runningSessions`. */
+function isSnapshotWithoutRunning(data: unknown): boolean {
+  return typeof data === "object" && data !== null && "serverNow" in data && "categories" in data && !("runningSessions" in data);
+}
+
 /** Lê o snapshot completo do usuário (uma ida ao banco) e valida o formato. */
 export async function loadSnapshot(client: RpcClient): Promise<Result<Snapshot>> {
   const { data, error } = await client.rpc("get_snapshot");
@@ -42,6 +47,10 @@ export async function loadSnapshot(client: RpcClient): Promise<Result<Snapshot>>
   try {
     return ok(parseSnapshot(data));
   } catch {
+    // O app novo foi publicado antes da migração de Corrida: diz o que fazer, em vez de um "formato inesperado" genérico.
+    if (isSnapshotWithoutRunning(data)) {
+      return fail("O banco ainda não tem a atualização de Corrida. Aplique a migração 20261014000013_running e recarregue.", "unknown");
+    }
     // O banco devolveu algo que o domínio não entende: erro explícito, nunca dado pela metade.
     return fail("Não foi possível ler seus dados (formato inesperado).", "unknown");
   }

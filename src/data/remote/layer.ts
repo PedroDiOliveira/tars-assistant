@@ -54,7 +54,13 @@ async function dispatch(command: Command): Promise<Result<Outcome>> {
     } catch {
       result = fail("Sem conexão com o servidor. Nada foi salvo.", "offline");
     }
-    if (!result.ok && result.code === "unauthorized") goToLogin();
+    if (!result.ok) {
+      // Nada foi salvo, e o total otimista na tela é mentira. A releitura do `finally` o corrige, mas ela falha
+      // justamente quando o servidor está fora do ar: sem isto, o cache guardaria o efeito otimista até a
+      // próxima leitura bem-sucedida. Desfaz já, só se este for o único comando em andamento (não desfaz o de outro).
+      if (inflight === 1) queryClient.setQueryData<SnapshotPayload>(SNAPSHOT_KEY, before);
+      if (result.code === "unauthorized") goToLogin();
+    }
     return result;
   } finally {
     inflight -= 1;
@@ -109,6 +115,7 @@ function selectData({ data }: SnapshotPayload): DataSnapshot {
     studySessions: data.studySessions,
     books: data.books,
     readingSessions: data.readingSessions,
+    runningSessions: data.runningSessions,
   };
 }
 

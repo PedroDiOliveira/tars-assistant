@@ -1,11 +1,5 @@
-import {
-  daysBetween,
-  daysInWeek,
-  inPeriod,
-  weekPeriod,
-  type DateKey,
-  type Period,
-} from "@/lib/dates";
+import { daysBetween, inPeriod, weekPeriod, type DateKey, type Period } from "@/lib/dates";
+import { weekDotsFromDates, type WeekDot } from "./activity";
 import type {
   Exercise,
   SessionExercise,
@@ -24,21 +18,9 @@ export function sessionsInWeek(sessions: WorkoutSession[], day: DateKey): Workou
   return sessionsInPeriod(sessions, weekPeriod(day));
 }
 
-export interface WeekDot {
-  date: DateKey;
-  /** quantidade de treinos concluídos no dia */
-  count: number;
-  isToday: boolean;
-  isFuture: boolean;
-}
-
+/** Treinos de musculação concluídos em cada dia da semana de `today`. */
 export function weekDots(sessions: WorkoutSession[], today: DateKey): WeekDot[] {
-  return daysInWeek(today).map((date) => ({
-    date,
-    count: sessions.filter((s) => s.occurredOn === date).length,
-    isToday: date === today,
-    isFuture: date > today,
-  }));
+  return weekDotsFromDates(sessions.map((s) => s.occurredOn), today);
 }
 
 /** Volume = soma de carga × repetições das séries concluídas com carga externa. */

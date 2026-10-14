@@ -1,21 +1,26 @@
 import { Check } from "lucide-react";
 import { cn } from "cn";
 import { WEEK_LABELS } from "@/lib/constants";
-import type { WeekDot } from "@/domain/workouts";
+import type { WeekDot } from "@/domain/activity";
 
 interface WeekDotsProps {
   dots: WeekDot[];
+  /**
+   * O que a bolinha preenchida significa ("treino", "corrida"...). Só alimenta o texto acessível: quem usa o
+   * componente diz o que marcou, para a corrida não ser anunciada como musculação (nem o contrário).
+   */
+  activity: string;
   /** lg mostra o nome abreviado do dia (Seg, Ter...) */
   size?: "sm" | "lg";
   className?: string;
 }
 
-/** Sete bolinhas, de segunda a domingo: preenchida = treino concluído no dia. */
-export function WeekDots({ dots, size = "sm", className }: WeekDotsProps) {
+/** Sete bolinhas, de segunda a domingo: preenchida = houve ao menos um registro do módulo no dia. */
+export function WeekDots({ dots, activity, size = "sm", className }: WeekDotsProps) {
   const done = dots.filter((d) => d.count > 0).length;
   return (
     <ul
-      aria-label={`${done} ${done === 1 ? "dia" : "dias"} com treino nesta semana`}
+      aria-label={`${done} ${done === 1 ? "dia" : "dias"} com ${activity} nesta semana`}
       className={cn("flex items-center", size === "lg" ? "justify-between gap-1" : "gap-1.5", className)}
     >
       {dots.map((dot, i) => {
@@ -41,6 +46,7 @@ export function WeekDots({ dots, size = "sm", className }: WeekDotsProps) {
               )}
             >
               {WEEK_LABELS[i]}
+              {filled ? <span className="sr-only">, com {activity}</span> : null}
             </span>
           </li>
         );

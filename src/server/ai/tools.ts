@@ -2,6 +2,7 @@ import { z } from "zod";
 import { expensesByCategory } from "@/domain/finance";
 import { formatBRL } from "@/domain/money";
 import { pagesInPeriod } from "@/domain/reading";
+import { formatDistance, runsInPeriod, runTotals } from "@/domain/running";
 import type { AppData } from "@/domain/snapshot";
 import { secondsBySubject } from "@/domain/studies";
 import { financeSummary } from "@/domain/summary";
@@ -144,7 +145,45 @@ function workoutSummary(args: unknown, ctx: ToolContext): ToolOutcome {
       hasRecords: sessions.length > 0,
       sessionsCompleted: sessions.length,
       byWeek: weeks.slice(-53),
-      note: "Só treinos finalizados contam.",
+      note: "Só treinos de MUSCULAÇÃO finalizados contam. Corridas são outra coisa: use get_running_summary.",
+    },
+  };
+}
+
+/**
+ * Corridas num período. Os números vêm de `runTotals`, o mesmo cálculo da tela e da Home. Distância informada e
+ * distância desconhecida são coisas diferentes: uma corrida sem distância conta como corrida e marca o dia, mas
+ * não soma km, e o total de km NÃO é "0" quando nenhuma corrida tem distância: é desconhecido.
+ */
+function runningSummary(args: unknown, ctx: ToolContext): ToolOutcome {
+  const parsed = range.safeParse(args);
+  if (!parsed.success) return { kind: "error", message: parsed.error.issues[0]?.message ?? "Argumentos inválidos." };
+  const checked = checkRange(parsed.data);
+  if ("error" in checked) return { kind: "error", message: checked.error };
+  const { period } = checked;
+
+  const runs = runsInPeriod(ctx.data.runningSessions, period);
+  const totals = runTotals(runs);
+  const weeks: { weekStarting: DateKey; runs: number; reportedDistanceText: string | null }[] = [];
+  for (let day = weekStart(period.start); day <= period.end; day = addDays(day, 7)) {
+    const week = runTotals(runsInPeriod(runs, { start: day, end: addDays(day, 6) }));
+    weeks.push({
+      weekStarting: day,
+      runs: week.runs,
+      reportedDistanceText: week.hasDistance ? formatDistance(week.distanceMeters) : null,
+    });
+  }
+  return {
+    kind: "result",
+    payload: {
+      period: { from: period.start, to: period.end, label: periodLabel(period) },
+      hasRecords: runs.length > 0,
+      runs: totals.runs,
+      daysWithRun: totals.activeDays,
+      reportedDistanceText: totals.hasDistance ? formatDistance(totals.distanceMeters) : null,
+      runsWithoutDistance: totals.runsWithoutDistance,
+      byWeek: weeks.slice(-53),
+      note: "reportedDistanceText é a soma só das distâncias INFORMADAS; null = nenhuma corrida do período tem distância (total desconhecido, não zero). runsWithoutDistance corridas contam como corrida mas não somam km.",
     },
   };
 }
@@ -248,7 +287,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: "get_workout_summary",
-    description: "Treinos concluídos num período, no total e por semana.",
+    description: "Treinos de MUSCULAÇÃO concluídos num período, no total e por semana. Não inclui corridas.",
+    parameters: RANGE_SCHEMA,
+  },
+  {
+    name: "get_running_summary",
+    description:
+      "Corridas num período: quantidade de corridas, dias com corrida e distância informada (km), no total e por semana. Informa quantas corridas ficaram sem distância.",
     parameters: RANGE_SCHEMA,
   },
   {
@@ -272,6 +317,7 @@ const EXECUTORS: Record<string, (args: unknown, ctx: ToolContext) => ToolOutcome
   propose_transaction: propose,
   get_financial_summary: financialSummary,
   get_workout_summary: workoutSummary,
+  get_running_summary: runningSummary,
   get_study_summary: studySummary,
   get_reading_summary: readingSummary,
 };

@@ -182,7 +182,17 @@ try {
     { name: "Novo lançamento", url: "/financas", open: () => page.getByRole("button", { name: "Lançamento" }).first().click() },
     { name: "Lançar por texto", url: "/financas", open: () => page.getByRole("button", { name: "Por texto" }).click() },
     { name: "Nova ficha de treino", url: "/treino", open: () => page.getByRole("button", { name: "Nova ficha" }).click() },
-    { name: "Meta de treinos", url: "/configuracoes", open: () => page.getByRole("button", { name: /Treinos por semana/ }).click() },
+    { name: "Meta de treinos", url: "/configuracoes", open: () => page.getByRole("button", { name: /Treinos de musculação por semana/ }).click() },
+    // Corrida: o último campo do formulário é a observação, dentro de "Duração e observação"; abre a área antes de medir.
+    {
+      name: "Registrar corrida",
+      url: "/treino/corrida",
+      open: async () => {
+        await page.locator("main").getByRole("button", { name: "Registrar corrida" }).first().click();
+        await page.locator('[data-slot="drawer-content"]').getByRole("button", { name: /Duração e observação/ }).click();
+      },
+    },
+    { name: "Meta de corrida", url: "/configuracoes", open: () => page.getByRole("button", { name: /Corrida por semana/ }).click() },
     { name: "Nova categoria", url: "/configuracoes/catalogos", open: () => page.getByRole("button", { name: "Despesa" }).first().click() },
     { name: "Estudo manual", url: "/estudos", open: () => page.getByRole("button", { name: "Manual" }).click() },
   ];

@@ -9,6 +9,7 @@ import type { WorkoutDraft } from "@/domain/types";
 import { addDraftSet, buildDraft, removeDraftSet, setDraftNotes, updateDraftSet } from "@/domain/workouts";
 import { createDataActions, type ActionHost } from "../actions";
 import { fail, ok, type Actions, type LocalActions } from "../contract";
+import { migrateDemoState } from "./migrate";
 import { buildSeed } from "./seed";
 
 /** Estado que só existe no aparelho (não é um dado de negócio). */
@@ -42,26 +43,16 @@ function pickAppData(s: TarsState): AppData {
     timer: s.timer,
     books: s.books,
     readingSessions: s.readingSessions,
+    runningSessions: s.runningSessions,
   };
-}
-
-/**
- * v2: o rascunho de treino ganhou `id` (vira o id da sessão ao finalizar). Rascunhos salvos na v1
- * não têm; sem isto, finalizar um treino iniciado antes da atualização geraria uma sessão sem id.
- */
-function migrate(persisted: unknown, version: number): TarsState {
-  const state = persisted as TarsState;
-  if (version < 2 && state.draft && !state.draft.id) {
-    return { ...state, draft: { ...state.draft, id: uid() } };
-  }
-  return state;
 }
 
 export const useTarsStore = create<TarsState>()(
   persist(() => EMPTY, {
     name: DEMO_STORAGE_KEY,
-    version: 2,
-    migrate,
+    // v3: corridas. Ver `migrateDemoState` para o histórico de versões.
+    version: 3,
+    migrate: migrateDemoState,
     storage: createJSONStorage(() => localStorage),
     // O Next renderiza no servidor: a reidratação é disparada manualmente no cliente.
     skipHydration: true,

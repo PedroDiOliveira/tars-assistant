@@ -1,6 +1,7 @@
 import type { Command, Outcome } from "./commands";
 import { upsertGoal } from "./goals";
 import { validateReadingSession } from "./reading";
+import { futureRunError, normalizeRunFields, RUN_NOT_FOUND } from "./running";
 import type { AppData } from "./snapshot";
 import { finishTimer, pauseTimer, resumeTimer, startTimer } from "./studies";
 import type { WorkoutPlan } from "./types";
@@ -256,6 +257,29 @@ export function applyCommand(data: AppData, command: Command): Applied {
     }
     case "reading.deleteSession":
       return saved({ ...data, readingSessions: removeById(data.readingSessions, command.id) });
+
+    /* ---------- corrida ---------- */
+    case "running.addSession": {
+      const { id, ...fields } = command.session;
+      // Repetir o mesmo id (toque duplo, nova tentativa depois de resposta perdida) é o mesmo registro.
+      if (data.runningSessions.some((r) => r.id === id)) return saved(data);
+      const future = futureRunError(fields.occurredOn, command.nowMs);
+      if (future) return failed(future);
+      return saved({ ...data, runningSessions: [...data.runningSessions, { id, ...normalizeRunFields(fields) }] });
+    }
+    case "running.updateSession": {
+      const current = data.runningSessions.find((r) => r.id === command.id);
+      if (!current) return failed(RUN_NOT_FOUND);
+      // Só mover a data para o futuro é recusado: corrigir uma corrida que já existe não depende do relógio.
+      const future = command.fields.occurredOn !== current.occurredOn ? futureRunError(command.fields.occurredOn, command.nowMs) : null;
+      if (future) return failed(future);
+      return saved({
+        ...data,
+        runningSessions: data.runningSessions.map((r) => (r.id === command.id ? { id: r.id, ...normalizeRunFields(command.fields) } : r)),
+      });
+    }
+    case "running.deleteSession":
+      return saved({ ...data, runningSessions: removeById(data.runningSessions, command.id) });
 
     default: {
       const unreachable: never = command;

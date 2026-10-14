@@ -8,6 +8,7 @@ export const GOAL_PERIOD: Record<GoalKind, "month" | "week"> = {
   workout_sessions: "week",
   study_minutes: "week",
   reading_pages: "week",
+  running_meters: "week",
 };
 
 /**

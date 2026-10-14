@@ -43,7 +43,8 @@ export type GoalKind =
   | "category_budget" // centavos de despesa por categoria, mensal
   | "workout_sessions" // sessões concluídas, semanal
   | "study_minutes" // minutos, semanal (geral ou por matéria)
-  | "reading_pages"; // páginas, semanal
+  | "reading_pages" // páginas, semanal
+  | "running_meters"; // metros corridos, semanal (guardado em metros inteiros; a interface fala em km)
 
 export interface Goal {
   id: string;
@@ -180,5 +181,21 @@ export interface ReadingSession {
   startPage: number;
   /** posição depois da sessão */
   endPage: number;
+  notes?: string;
+}
+
+/* ---------- Corrida ---------- */
+
+/**
+ * Uma corrida realizada. Registro manual: não há início, fim nem trajeto, só o dia e, quando se sabe,
+ * a distância e a duração. Distância e duração ausentes significam "não informado", nunca zero.
+ */
+export interface RunningSession {
+  id: string;
+  occurredOn: DateKey;
+  /** metros inteiros e positivos (5,25 km = 5250); ausente quando a pessoa não sabe */
+  distanceMeters?: number;
+  /** segundos inteiros e positivos; ausente quando a pessoa não sabe */
+  durationSeconds?: number;
   notes?: string;
 }

@@ -130,6 +130,40 @@ describe("get_workout_summary", () => {
   });
 });
 
+describe("get_running_summary", () => {
+  it("separa corridas, dias e distância informada: 2 corridas no mesmo dia = 1 dia; a sem distância não soma km", () => {
+    const payload = result(run("get_running_summary", { from: "2026-10-05", to: "2026-10-11" }));
+    expect(payload).toMatchObject({
+      hasRecords: true,
+      runs: 3,
+      daysWithRun: 2,
+      reportedDistanceText: "8 km",
+      runsWithoutDistance: 1,
+    });
+    expect(payload.byWeek).toEqual([{ weekStarting: "2026-10-05", runs: 3, reportedDistanceText: "8 km" }]);
+  });
+
+  it("não mistura com musculação: os treinos da mesma semana não entram nas corridas, nem o contrário", () => {
+    expect(result(run("get_workout_summary", { from: "2026-10-05", to: "2026-10-11" })).sessionsCompleted).toBe(2);
+    expect(result(run("get_running_summary", { from: "2026-10-05", to: "2026-10-11" })).runs).toBe(3);
+  });
+
+  it("nenhuma corrida com distância: o total é desconhecido (null), nunca 0 km", () => {
+    const data = sampleData({ runningSessions: [{ id: "x", occurredOn: "2026-10-06" }, { id: "y", occurredOn: "2026-10-07" }] });
+    const payload = result(run("get_running_summary", { from: "2026-10-05", to: "2026-10-11" }, { data, today: TODAY }));
+    expect(payload).toMatchObject({ runs: 2, daysWithRun: 2, reportedDistanceText: null, runsWithoutDistance: 2 });
+  });
+
+  it("período sem corrida: hasRecords=false (não é o mesmo que zero km)", () => {
+    expect(result(run("get_running_summary", { from: "2026-10-12", to: "2026-10-18" }))).toMatchObject({ hasRecords: false, runs: 0, reportedDistanceText: null });
+  });
+
+  it("recusa período inválido e campos desconhecidos", () => {
+    expect(error(run("get_running_summary", { from: "2026-10-11", to: "2026-10-05" }))).toMatch(/depois do fim/);
+    expect(error(run("get_running_summary", { from: "2026-10-05", to: "2026-10-11", userId: "x" }))).toBeTruthy();
+  });
+});
+
 describe("get_study_summary", () => {
   it("total e por matéria (SQL 1h30 + Português 15 min na semana)", () => {
     const out = result(run("get_study_summary", { from: "2026-10-05", to: "2026-10-11" }));
@@ -193,7 +227,7 @@ describe("runTool", () => {
   });
   it("só a proposta é a ferramenta que 'escreve', e mesmo ela não grava: o catálogo de ferramentas não tem apagar/alterar", () => {
     expect(TOOL_DEFINITIONS.map((t) => t.name).sort()).toEqual([
-      "get_financial_summary", "get_reading_summary", "get_study_summary", "get_workout_summary", "propose_transaction",
+      "get_financial_summary", "get_reading_summary", "get_running_summary", "get_study_summary", "get_workout_summary", "propose_transaction",
     ]);
   });
 });

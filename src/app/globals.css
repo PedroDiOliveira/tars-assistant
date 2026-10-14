@@ -42,7 +42,7 @@
   --color-danger-soft: var(--danger-soft);
   --color-danger-ink: var(--danger-ink);
 
-  /* cor do módulo corrente: data-module="finance|workout|study|reading" num ancestral */
+  /* cor do módulo corrente: data-module="finance|workout|running|study|reading" num ancestral */
   --color-m: var(--m);
   --color-m-soft: var(--m-soft);
   --color-m-ink: var(--m-ink);
@@ -165,7 +165,9 @@
   --m-soft: var(--finance-soft);
   --m-ink: var(--finance-ink);
 }
-[data-module="workout"] {
+/* Corrida divide a cor de Musculação: as duas são seções de Exercícios. */
+[data-module="workout"],
+[data-module="running"] {
   --m: var(--workout);
   --m-soft: var(--workout-soft);
   --m-ink: var(--workout-ink);

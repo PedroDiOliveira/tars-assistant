@@ -15,7 +15,8 @@ interface NavItem {
 const ITEMS: NavItem[] = [
   { href: "/inicio", label: "Início", icon: House },
   { href: "/financas", label: "Finanças", icon: Wallet },
-  { href: "/treino", label: "Treino", icon: Dumbbell },
+  // "Exercícios" é a área; Musculação e Corrida são abas dentro dela (rotas /treino e /treino/corrida).
+  { href: "/treino", label: "Exercícios", icon: Dumbbell },
   { href: "/estudos", label: "Estudos", icon: BookOpenText },
 ];
 

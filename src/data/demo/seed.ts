@@ -14,6 +14,7 @@ import type {
   Exercise,
   Goal,
   ReadingSession,
+  RunningSession,
   SessionExercise,
   StudySession,
   Subject,
@@ -36,6 +37,7 @@ export interface SeedData {
   studySessions: StudySession[];
   books: Book[];
   readingSessions: ReadingSession[];
+  runningSessions: RunningSession[];
 }
 
 /* Catálogos iniciais em PT-BR (editáveis no app real). */
@@ -255,6 +257,9 @@ export function buildSeed(today: DateKey): SeedData {
     { id: "g-study-pt", kind: "study_minutes", scopeId: "sub-pt", validFrom: weekFrom, target: 180 },
     { id: "g-study-redes", kind: "study_minutes", scopeId: "sub-redes", validFrom: weekFrom, target: 120 },
     { id: "g-reading", kind: "reading_pages", scopeId: null, validFrom: weekFrom, target: 70 },
+    // Corrida: 15 km por semana até a semana -3; 20 km depois (a meta antiga continua valendo para as semanas passadas).
+    { id: "g-running-1", kind: "running_meters", scopeId: null, validFrom: addDays(weekNow, -7 * 6), target: 15_000 },
+    { id: "g-running-2", kind: "running_meters", scopeId: null, validFrom: addDays(weekNow, -21), target: 20_000 },
   ];
 
   /* ---------- Treino ---------- */
@@ -373,6 +378,23 @@ export function buildSeed(today: DateKey): SeedData {
   readRun("book-sapiens", 0, 38, 30, 120);
   readRun("book-habits", 40, 17, 1, 300, true);
 
+  /* ---------- Corrida ---------- */
+  // Sem sorteio, de propósito: assim o resto dos dados fictícios continua idêntico ao de antes da corrida.
+  const runningSessions: RunningSession[] = [];
+  const addRun = (back: number, run: Omit<RunningSession, "id" | "occurredOn">) =>
+    runningSessions.push({ id: id("run"), occurredOn: addDays(today, -back), ...run });
+  for (let back = 1; back <= 42; back += 1) {
+    const dow = weekdayIndex(addDays(today, -back));
+    if (dow === 1) addRun(back, { distanceMeters: 5_000 + (back % 3) * 500, durationSeconds: (30 + (back % 4) * 2) * 60 });
+    if (dow === 3) addRun(back, { distanceMeters: 7_500, durationSeconds: 46 * 60 });
+    if (dow === 5) addRun(back, { distanceMeters: 10_000 + (back % 2) * 1_000, durationSeconds: (58 + (back % 5)) * 60 + 30 });
+  }
+  // Ontem sempre tem corrida (o demo nunca abre com a semana vazia) e há uma sem distância, para mostrar esse estado.
+  if (!runningSessions.some((r) => r.occurredOn === addDays(today, -1))) {
+    addRun(1, { distanceMeters: 5_000, durationSeconds: 30 * 60 });
+  }
+  addRun(2, { notes: "Corrida leve, fiquei sem o relógio" });
+
   return {
     categories: CATEGORIES,
     transactions,
@@ -385,5 +407,6 @@ export function buildSeed(today: DateKey): SeedData {
     studySessions,
     books,
     readingSessions,
+    runningSessions,
   };
 }

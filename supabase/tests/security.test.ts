@@ -15,7 +15,7 @@ async function populate(userId: string) {
     "select id from public.exercises where user_id = $1 limit 1", [userId]);
   const ids = {
     category: cat.id, exercise: ex.id, tx: uid(), tpl: uid(), subject: uid(), studySession: uid(),
-    goal: uid(), plan: uid(), session: uid(), book: uid(), reading: uid(),
+    goal: uid(), plan: uid(), session: uid(), book: uid(), reading: uid(), running: uid(),
   };
   const SE = "00000000-0000-4000-8000-0000000000aa";
   const statements: [string, unknown[]][] = [
@@ -42,6 +42,8 @@ async function populate(userId: string) {
     [`insert into public.books (id, user_id, title, total_pages) values ($1, $2, 'Livro', 300)`, [ids.book, userId]],
     [`insert into public.reading_sessions (id, user_id, book_id, occurred_on, start_page, end_page)
       values ($1, $2, $3, '2026-10-07', 0, 20)`, [ids.reading, userId, ids.book]],
+    [`insert into public.running_sessions (id, user_id, occurred_on, distance_meters, duration_seconds)
+      values ($1, $2, '2026-10-07', 5200, 1800)`, [ids.running, userId]],
   ];
   for (const [sql, params] of statements) await t.admin(sql, params);
   return ids;
@@ -98,7 +100,7 @@ describe("isolamento entre usuários (RLS)", () => {
   const TABLES = [
     "categories", "transactions", "tx_templates", "goals", "exercises", "workout_plans",
     "workout_plan_exercises", "workout_sessions", "session_exercises", "exercise_sets",
-    "study_subjects", "study_sessions", "study_timers", "books", "reading_sessions",
+    "study_subjects", "study_sessions", "study_timers", "books", "reading_sessions", "running_sessions",
   ];
 
   it.each(TABLES)("%s: B não enxerga nenhuma linha de A", async (table) => {
@@ -170,12 +172,32 @@ describe("isolamento entre usuários (RLS)", () => {
   it("o snapshot de B não contém nada de A", async () => {
     const snap = await t.as(B, (s) => s.snapshot());
     const serialized = JSON.stringify(snap);
-    for (const id of [a.tx, a.subject, a.book, a.plan, a.session, a.goal, a.tpl]) {
+    for (const id of [a.tx, a.subject, a.book, a.plan, a.session, a.goal, a.tpl, a.running]) {
       expect(serialized).not.toContain(id);
     }
     expect(snap.data.transactions).toHaveLength(0);
     expect(snap.data.timer).toBeNull();
+    expect(snap.data.runningSessions).toEqual([]);
     expect(snap.profile?.displayName).toBe("bruno");
+  });
+
+  it("corridas: B não altera nem apaga a corrida de A, nem por tabela nem por comando", async () => {
+    await t.as(B, async (s) => {
+      expect(await s.query("update public.running_sessions set distance_meters = 1 where id = $1 returning id", [a.running])).toHaveLength(0);
+      expect(await s.query("delete from public.running_sessions where id = $1 returning id", [a.running])).toHaveLength(0);
+      await s.command({ type: "running.deleteSession", id: a.running });
+      expect(await sqlMessage(s.command({ type: "running.updateSession", id: a.running, nowMs: Date.now(), fields: { occurredOn: "2026-10-07", distanceMeters: 1 } }))).toBe("Corrida não encontrada.");
+    });
+    const [run] = await t.admin<{ distance_meters: number }>("select distance_meters from public.running_sessions where id = $1", [a.running]);
+    expect(run.distance_meters).toBe(5200);
+  });
+
+  it("corridas: B não cria uma corrida em nome de A (WITH CHECK) nem troca o dono de uma própria", async () => {
+    expect(await t.as(B, (s) => sqlState(s.query(
+      "insert into public.running_sessions (id, user_id, occurred_on) values ($1, $2, '2026-10-07')", [uid(), A])))).toBe("42501");
+    const mine = uid();
+    await t.as(B, (s) => s.query("insert into public.running_sessions (id, occurred_on) values ($1, '2026-10-07')", [mine]));
+    expect(await t.as(B, (s) => sqlState(s.query("update public.running_sessions set user_id = $1 where id = $2", [A, mine])))).toBe("42501");
   });
 
   it("comando de B não afeta A: excluir o lançamento de A com o id dele não apaga nada", async () => {
@@ -186,7 +208,7 @@ describe("isolamento entre usuários (RLS)", () => {
 });
 
 describe("sem login (papel anon)", () => {
-  it.each(["transactions", "profiles", "categories", "study_timers"])("não lê %s", async (table) => {
+  it.each(["transactions", "profiles", "categories", "study_timers", "running_sessions"])("não lê %s", async (table) => {
     expect(await t.anon((s) => sqlState(s.query(`select * from public.${table}`)))).toBe("42501");
   });
 
@@ -266,7 +288,7 @@ describe("permissões de execução (trava contra função nova esquecida)", () 
     // todo comando existente é executável (senão o despachante falharia só em produção)
     const allCommands = fns.filter((f) => f.name.startsWith("cmd_")).length;
     expect(commands).toHaveLength(allCommands);
-    expect(allCommands).toBeGreaterThanOrEqual(33);
+    expect(allCommands).toBeGreaterThanOrEqual(36); // 33 anteriores + os 3 de corrida
   });
 
   it("só as funções `security definer` CONHECIDAS existem (cada uma é uma elevação de privilégio consciente)", async () => {
@@ -292,7 +314,7 @@ describe("permissões de execução (trava contra função nova esquecida)", () 
   });
 
   it("as funções de cadastro e os gatilhos NÃO são executáveis por quem está logado", () => {
-    const internal = ["seed_defaults", "handle_new_user", "set_updated_at", "reading_session_within_book", "book_pages_cover_readings"];
+    const internal = ["seed_defaults", "handle_new_user", "set_updated_at", "reading_session_within_book", "book_pages_cover_readings", "running_session_not_future"];
     for (const name of internal) {
       const fn = fns.find((f) => f.name === name);
       expect(fn, name).toBeDefined();

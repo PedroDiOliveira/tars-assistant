@@ -146,5 +146,15 @@ export function createDataActions(host: ActionHost): DataActions {
       send({ type: "reading.addSession", session: { ...input, id: host.newId() } }),
     updateReadingSession: (id, fields) => send({ type: "reading.updateSession", id, fields }),
     deleteReadingSession: (id) => send({ type: "reading.deleteSession", id }),
+
+    /* ---------- corrida ---------- */
+    async addRunningSession(input) {
+      // O id vem do formulário (gerado ao abrir): reenviar depois de uma falha é o MESMO registro, nunca outro.
+      const id = input.id ?? host.newId();
+      const sent = await host.dispatch({ type: "running.addSession", session: { ...input, id }, nowMs: host.now() });
+      return sent.ok ? ok({ id }) : sent;
+    },
+    updateRunningSession: (id, fields) => send({ type: "running.updateSession", id, fields, nowMs: host.now() }),
+    deleteRunningSession: (id) => send({ type: "running.deleteSession", id }),
   };
 }

@@ -52,16 +52,17 @@ for (const port of [APP_PORT, DB_PORT, AI_PORT, NOAI_PORT]) {
   }
 }
 
-const fake = await startFakeSupabase({ port: DB_PORT });
 const xai = await startFakeXai({ port: AI_PORT });
-const userA = await fake.createUser("pedro@tars.example", PASSWORD);
-await fake.createUser("outro@tars.example", "outra-senha-forte-1");
+// O Supabase falso (PGlite, o maior consumidor de memória) só sobe DEPOIS do build: assim ele nunca coexiste com a
+// compilação em máquinas pequenas. A URL é conhecida de antemão (a porta é fixa).
+let fake;
+let userA;
 
 const appEnv = {
   ...process.env,
   NEXT_DIST_DIR: DIST,
   NEXT_PUBLIC_APP_MODE: "live",
-  SUPABASE_URL: fake.url,
+  SUPABASE_URL: `http://127.0.0.1:${DB_PORT}`,
   SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
   CRON_SECRET: "segredo-do-cron-com-16-ou-mais",
   AI_PROVIDER: "xai",
@@ -78,7 +79,7 @@ async function shutdown(code) {
     serverNoAi?.kill("SIGKILL");
   } catch {}
   await xai.close().catch(() => {});
-  await fake.close().catch(() => {});
+  await fake?.close().catch(() => {});
   process.exit(code);
 }
 
@@ -89,6 +90,10 @@ try {
     console.error(build.stdout?.slice(-2000), build.stderr?.slice(-2000));
     throw new Error("O build live falhou");
   }
+
+  fake = await startFakeSupabase({ port: DB_PORT });
+  userA = await fake.createUser("pedro@tars.example", PASSWORD);
+  await fake.createUser("outro@tars.example", "outra-senha-forte-1");
 
   // Direto pelo Node (sem npx/sh no meio): o kill acerta o servidor de verdade, sem deixar processo órfão.
   const nextBin = path.join(ROOT, "node_modules", "next", "dist", "bin", "next");
@@ -179,7 +184,7 @@ try {
     check("Login real tem o link 'Esqueci minha senha'", (await page.getByRole("link", { name: "Esqueci minha senha" }).count()) === 1);
 
     const redirects = [];
-    for (const p of ["/", "/inicio", "/financas", "/treino", "/estudos", "/estudos/leitura", "/configuracoes", "/assistente", "/treino/sessao"]) {
+    for (const p of ["/", "/inicio", "/financas", "/treino", "/estudos", "/estudos/leitura", "/configuracoes", "/assistente", "/treino/sessao", "/treino/corrida", "/treino/corrida/historico"]) {
       const r = await ctx.request.get(p, { maxRedirects: 0 });
       redirects.push([p, r.status(), r.headers()["location"] ?? ""]);
     }
@@ -548,6 +553,190 @@ try {
   await pageA.waitForTimeout(500);
   check("Excluir o livro apagou as leituras dele (cascata)", (await dbRows("select (select count(*)::int from public.books) as b, (select count(*)::int from public.reading_sessions) as r"))[0].b === 0 && (await dbRows("select count(*)::int as n from public.reading_sessions"))[0].n === 0);
 
+  /* ===== corrida (modo real: servidor + banco com as migrações reais) ===== */
+  {
+    const sp = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
+    const addDays = (key, n) => {
+      const [y, m, d] = key.split("-").map(Number);
+      return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+    };
+    const weekdayIndex = (key) => {
+      const [y, m, d] = key.split("-").map(Number);
+      return (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
+    };
+    const TODAY = sp.format(Date.now());
+    const WEEK_START = addDays(TODAY, -weekdayIndex(TODAY));
+    const sheetOf = (page) => page.locator('[data-slot="drawer-content"]');
+    const openRun = async (page = pageA) => {
+      await page.locator("main").getByRole("button", { name: "Registrar corrida" }).first().click();
+      await sheetOf(page).waitFor();
+      await page.waitForTimeout(500);
+    };
+    const saveRun = (page = pageA) => sheetOf(page).getByRole("button", { name: "Registrar corrida", exact: true }).click();
+    const runRows = () => dbRows("select user_id, occurred_on::text as day, distance_meters, duration_seconds, notes from public.running_sessions order by created_at, id");
+    const toasts = async (page = pageA) => (await page.locator("[data-sonner-toast]").allInnerTexts()).map(norm).join(" | ");
+    const mainText = async (page = pageA) => norm(await page.locator("main").first().innerText());
+
+    await pageA.goto("/treino/corrida");
+    await appReady(pageA);
+    check("Corrida: conta nova começa vazia, sem corridas fictícias", (await runRows()).length === 0 && /Nenhuma corrida registrada/.test(await mainText()));
+    check("Corrida: 'Exercícios' > Musculação | Corrida também no modo real", (await pageA.getByRole("link", { name: "Corrida", exact: true }).count()) >= 1 && (await pageA.getByRole("heading", { level: 1 }).first().innerText()) === "Exercícios");
+
+    // só a data
+    await openRun();
+    await saveRun();
+    await toast(pageA, "Corrida registrada").waitFor({ timeout: 8000 }).then(
+      () => check("Corrida só com a data: o aviso de sucesso aparece depois do servidor confirmar", true),
+      () => check("Corrida só com a data: o aviso de sucesso aparece depois do servidor confirmar", false),
+    );
+    await pageA.waitForTimeout(400);
+    let rows = await runRows();
+    check("Corrida só com a data: uma linha do usuário certo, sem distância nem duração (NULL, nunca 0)", rows.length === 1 && rows[0].user_id === userA && rows[0].day === TODAY && rows[0].distance_meters === null && rows[0].duration_seconds === null && rows[0].notes === null, JSON.stringify(rows));
+    check("Corrida só com a data: a tela conta a corrida e o dia, sem inventar quilômetros", /1 corrida · 1 dia com corrida/.test(await mainText()) && /Distância não preenchida/.test(await mainText()) && !/\b0 km\b/.test(await mainText()));
+
+    // 5,2 e 5.2 (com duração e observação)
+    await openRun();
+    await pageA.fill("#run-distance", "5,2");
+    await sheetOf(pageA).getByRole("button", { name: /Duração e observação/ }).click();
+    await sheetOf(pageA).getByLabel("Minutos", { exact: true }).fill("30");
+    await sheetOf(pageA).getByPlaceholder(/Parque/).fill("Parque");
+    await saveRun();
+    await toast(pageA, "Corrida de 5,2 km registrada").waitFor({ timeout: 8000 }).catch(() => {});
+    await pageA.waitForTimeout(400);
+    await openRun();
+    await pageA.fill("#run-distance", "5.2");
+    await saveRun();
+    await pageA.waitForTimeout(900);
+    rows = (await runRows()).filter((r) => r.distance_meters !== null);
+    check("Corrida: 5,2 e 5.2 gravam 5200 metros; 30 min = 1800 segundos; observação guardada", rows.length === 2 && rows.every((r) => r.distance_meters === 5200) && rows.some((r) => r.duration_seconds === 1800 && r.notes === "Parque"), JSON.stringify(rows));
+
+    // toque duplo
+    await openRun();
+    await pageA.fill("#run-distance", "2");
+    await sheetOf(pageA).getByRole("button", { name: "Registrar corrida", exact: true }).dblclick().catch(() => {});
+    await pageA.waitForTimeout(1500);
+    check("Corrida: toque duplo em Registrar grava uma única corrida no banco", (await runRows()).filter((r) => r.distance_meters === 2000).length === 1);
+
+    // servidor cai ao salvar: nada de falso sucesso, formulário preservado, total sem o km otimista
+    await openRun();
+    await pageA.fill("#run-distance", "9,9");
+    fake.setRestDown(true);
+    await saveRun();
+    await pageA.waitForTimeout(2500);
+    const runFail = await toasts();
+    check("Corrida: servidor cai ao salvar: erro claro e NUNCA 'registrada'", /Nada foi salvo|Sem conexão/.test(runFail) && !/Corrida de 9,9 km registrada/.test(runFail), runFail);
+    check("Corrida: a falha preserva o formulário para tentar de novo", (await sheetOf(pageA).count()) === 1 && (await pageA.inputValue("#run-distance")) === "9,9");
+    check("Corrida: depois da falha o total da tela NÃO fica com os 9,9 km otimistas", !/9,9 km/.test(await mainText()), (await mainText()).slice(0, 200));
+    check("Corrida: nada foi gravado durante a queda", (await runRows()).filter((r) => r.distance_meters === 9900).length === 0);
+    fake.setRestDown(false);
+    await pageA.waitForTimeout(500);
+    await saveRun(); // nova tentativa com o mesmo formulário
+    await toast(pageA, "Corrida de 9,9 km registrada").waitFor({ timeout: 8000 }).then(
+      () => check("Corrida: a nova tentativa depois da queda salva e só então confirma", true),
+      () => check("Corrida: a nova tentativa depois da queda salva e só então confirma", false),
+    );
+    await pageA.waitForTimeout(500);
+    check("Corrida: a nova tentativa grava uma única corrida de 9,9 km", (await runRows()).filter((r) => r.distance_meters === 9900).length === 1);
+
+    // resposta perdida: o servidor salvou, o app não soube; tentar de novo NÃO duplica (mesmo id)
+    await openRun();
+    await pageA.fill("#run-distance", "6,6");
+    fake.dropApplyResponses(1);
+    await saveRun();
+    await pageA.waitForTimeout(2500);
+    check("Corrida: resposta perdida: o app não afirma que salvou", !/Corrida de 6,6 km registrada/.test(await toasts()) && (await sheetOf(pageA).count()) === 1);
+    check("Corrida: ...embora o servidor JÁ tenha gravado a corrida", (await runRows()).filter((r) => r.distance_meters === 6600).length === 1);
+    await saveRun(); // tentar de novo: mesmo id
+    await pageA.waitForTimeout(1500);
+    check("Corrida: tentar de novo depois da resposta perdida NÃO duplica (o id é o mesmo)", (await runRows()).filter((r) => r.distance_meters === 6600).length === 1);
+    check("Corrida: ...e agora o app confirma e fecha o formulário", /Corrida de 6,6 km registrada/.test(await toasts()) && (await sheetOf(pageA).count()) === 0, await toasts());
+    fake.dropApplyResponses(0);
+
+    // data futura: o SERVIDOR decide, mesmo com o relógio do aparelho adiantado
+    {
+      const ctx = await newContext();
+      const page = await ctx.newPage();
+      watch(page);
+      await login(page, "pedro@tars.example", PASSWORD);
+      await page.waitForURL("**/inicio");
+      await ctx.clock.setFixedTime(Date.now() + 3 * 86_400_000); // o aparelho "acha" que hoje é daqui a 3 dias
+      await page.goto("/treino/corrida");
+      await appReady(page);
+      const serverTomorrow = addDays(TODAY, 1);
+      await openRun(page);
+      await sheetOf(page).getByLabel("Escolher outra data").fill(serverTomorrow);
+      await page.fill("#run-distance", "7");
+      await saveRun(page);
+      await page.waitForTimeout(2000);
+      check("Corrida: data futura é recusada pelo SERVIDOR (o relógio do aparelho não manda)", /data futura/.test(await toasts(page)) && (await runRows()).filter((r) => r.day === serverTomorrow).length === 0, await toasts(page));
+      check("Corrida: a recusa do servidor preserva o formulário e desfaz o total otimista", (await sheetOf(page).count()) === 1 && (await page.inputValue("#run-distance")) === "7" && !/\b7 km\b/.test(await mainText(page)));
+      await ctx.close();
+    }
+
+    // recarregar mantém; editar, mover de semana e excluir (pelo histórico: a tela principal só mostra as 5 últimas)
+    await pageA.goto("/treino/corrida");
+    await appReady(pageA);
+    check("Corrida: recarregar mantém as corridas (vêm do banco)", /9,9 km|6,6 km/.test(await mainText()));
+    await pageA.getByRole("link", { name: /Ver histórico/ }).click();
+    await pageA.waitForURL("**/treino/corrida/historico");
+    await appReady(pageA);
+    await pageA.locator("main").getByRole("button", { name: /Distância não informada/ }).first().click();
+    await sheetOf(pageA).waitFor();
+    await pageA.waitForTimeout(500);
+    await pageA.fill("#run-distance", "8,25");
+    await sheetOf(pageA).getByRole("button", { name: "Salvar alterações" }).click();
+    await toast(pageA, "Corrida atualizada").waitFor({ timeout: 8000 }).catch(() => {});
+    await pageA.waitForTimeout(500);
+    rows = await runRows();
+    const total = rows.length;
+    check("Corrida: adicionar a distância que faltava atualiza a MESMA linha (8250 m)", rows.filter((r) => r.distance_meters === 8250).length === 1 && rows.filter((r) => r.distance_meters === null).length === 0, JSON.stringify(rows.map((r) => r.distance_meters)));
+    await pageA.locator("main").getByRole("button", { name: /8,25 km/ }).first().click();
+    await sheetOf(pageA).waitFor();
+    await pageA.waitForTimeout(500);
+    await pageA.fill("#run-distance", "");
+    await sheetOf(pageA).getByLabel("Escolher outra data").fill(addDays(WEEK_START, -3));
+    await sheetOf(pageA).getByRole("button", { name: "Salvar alterações" }).click();
+    await pageA.waitForTimeout(900);
+    rows = await runRows();
+    const moved = rows.find((r) => r.day === addDays(WEEK_START, -3));
+    check("Corrida: remover a distância e mover a data para a semana passada grava NULL (não 0), a nova data e não duplica", moved && moved.distance_meters === null && rows.length === total, JSON.stringify(moved));
+    await pageA.locator("main").getByRole("button", { name: /Distância não informada/ }).first().click();
+    await sheetOf(pageA).waitFor();
+    await pageA.waitForTimeout(500);
+    await sheetOf(pageA).getByRole("button", { name: "Excluir corrida", exact: true }).click();
+    await pageA.getByRole("alertdialog").getByRole("button", { name: "Excluir" }).click();
+    await toast(pageA, "Corrida excluída").waitFor({ timeout: 8000 }).catch(() => {});
+    await pageA.waitForTimeout(500);
+    check("Corrida: excluir (com confirmação) apaga só essa linha do banco", (await runRows()).length === total - 1 && (await runRows()).every((r) => r.distance_meters !== null || r.day !== addDays(WEEK_START, -3)));
+    await pageA.goto("/treino/corrida");
+    await appReady(pageA);
+
+    // meta semanal em km
+    await pageA.locator("main").getByRole("button", { name: /Esta semana/ }).first().click();
+    await pageA.waitForSelector("#goal-value");
+    await pageA.fill("#goal-value", "12,5");
+    await pageA.getByRole("button", { name: "Salvar meta" }).click();
+    await toast(pageA, "Meta atualizada").waitFor({ timeout: 8000 }).catch(() => {});
+    await pageA.waitForTimeout(500);
+    let goalRows = await dbRows("select kind::text as kind, target, valid_from::text as valid_from, user_id from public.goals where kind::text = 'running_meters' order by valid_from");
+    check("Corrida: meta de 12,5 km grava 12500 metros no banco (não 125) com vigência na segunda-feira desta semana", goalRows.length === 1 && goalRows[0].target === 12500 && goalRows[0].valid_from === WEEK_START && goalRows[0].user_id === userA, JSON.stringify(goalRows));
+    check("Corrida: a tela mostra o progresso em km da meta", /de 12,5\s*km/.test(await mainText()), (await mainText()).slice(0, 160));
+    await pageA.locator("main").getByRole("button", { name: /Esta semana/ }).first().click();
+    await pageA.waitForSelector("#goal-value");
+    await pageA.fill("#goal-value", "20");
+    await pageA.getByRole("radio", { name: "Próxima semana" }).click();
+    await pageA.getByRole("button", { name: "Salvar meta" }).click();
+    await pageA.waitForTimeout(900);
+    goalRows = await dbRows("select target, valid_from::text as valid_from from public.goals where kind::text = 'running_meters' order by valid_from");
+    check("Corrida: nova meta para a próxima semana preserva a vigência anterior", goalRows.length === 2 && goalRows[0].target === 12500 && goalRows[1].target === 20000 && goalRows[1].valid_from === addDays(WEEK_START, 7), JSON.stringify(goalRows));
+    check("Corrida: a meta de musculação não foi tocada", (await dbRows("select count(*)::int as n from public.goals where kind::text = 'workout_sessions'"))[0].n === 0);
+
+    await pageA.goto("/inicio");
+    await appReady(pageA);
+    const homeRun = await mainText();
+    check("Corrida: a Home mostra Musculação, Corrida, Estudo e Leitura separados, com o progresso em km", ["Musculação", "Corrida", "Estudo", "Leitura"].every((l) => homeRun.includes(l)) && /Corrida.*de 12,5\s*km/.test(homeRun), homeRun.slice(0, 300));
+  }
+
   /* ===== assistente (xAI falsa: API compatível com a OpenAI) ===== */
   await pageA.goto("/financas");
   await appReady(pageA);
@@ -580,7 +769,7 @@ try {
   check("O app chamou o provedor com a chave configurada (cabeçalho Authorization)", xai.received.length === 2 && xai.received.every((r) => r.headers.authorization === `Bearer ${xai.apiKey}`), String(xai.received.length));
   const sentToModel = JSON.stringify(xai.received.map((r) => r.body));
   check("O que foi enviado ao modelo NÃO inclui descrições de lançamentos nem e-mail", !/Outback teste|Toque duplo|Sem rede|pedro@tars/.test(sentToModel));
-  check("O prompt traz a data de hoje do servidor e só as ferramentas permitidas", /\d{4}-\d{2}-\d{2}/.test(xai.received[0].body.messages[0].content) && xai.received[0].body.tools.map((t) => t.function.name).sort().join() === "get_financial_summary,get_reading_summary,get_study_summary,get_workout_summary,propose_transaction");
+  check("O prompt traz a data de hoje do servidor e só as ferramentas permitidas", /\d{4}-\d{2}-\d{2}/.test(xai.received[0].body.messages[0].content) && xai.received[0].body.tools.map((t) => t.function.name).sort().join() === "get_financial_summary,get_reading_summary,get_running_summary,get_study_summary,get_workout_summary,propose_transaction");
   const afterQuestion = await usageNow();
   check("O uso foi contado no banco (1 pergunta, 1280 tokens: 2 chamadas)", afterQuestion.requests === 1 && afterQuestion.tokens === 1280, JSON.stringify(afterQuestion));
 
@@ -666,7 +855,7 @@ try {
     const disposition = exported.headers()["content-disposition"] ?? "";
     const file = await exported.json();
     check("Exportar: baixa um .json com a data no nome", exported.status() === 200 && /attachment; filename="tars-backup-\d{4}-\d{2}-\d{2}\.json"/.test(disposition), disposition);
-    check("Exportar: formato versionado e dados do usuário A (inclusive categorias arquivadas)", file.app === "tars" && file.version === 1 && file.data.transactions.length >= 3 && file.data.categories.some((c) => c.archived !== true) && file.data.books !== undefined, `${file.data.transactions.length} lançamentos`);
+    check("Exportar: formato versionado e dados do usuário A (inclusive categorias arquivadas)", file.app === "tars" && file.version === 2 && Array.isArray(file.data.runningSessions) && file.data.runningSessions.length >= 4 && file.data.runningSessions.every((r) => Number.isInteger(r.distanceMeters)) && file.data.transactions.length >= 3 && file.data.categories.some((c) => c.archived !== true) && file.data.books !== undefined, `${file.data.transactions.length} lançamentos`);
     check("Exportar: não vaza e-mail, id de usuário nem sessão", !/pedro@tars|"user_id"|userId|access_token/i.test(JSON.stringify(file)));
     check("Exportar: nunca é cacheável", /no-store/.test(exported.headers()["cache-control"] ?? ""));
     const anon = await (await newContext()).request.get("/api/export");
@@ -766,7 +955,7 @@ try {
     await appReady(page);
     const snap = await (await ctx.request.get("/api/snapshot")).json();
     const leaked = JSON.stringify(snap).includes(userA);
-    check("B: o snapshot não contém NADA do usuário A", !leaked && snap.data.transactions.length === 0 && snap.data.books.length === 0 && snap.data.subjects.length === 0);
+    check("B: o snapshot não contém NADA do usuário A", !leaked && snap.data.transactions.length === 0 && snap.data.books.length === 0 && snap.data.subjects.length === 0 && snap.data.runningSessions.length === 0);
     await page.goto("/financas");
     await appReady(page);
     check("B: a tela de finanças está vazia (sem os lançamentos de A)", (await page.getByText("Outback teste").count()) === 0);

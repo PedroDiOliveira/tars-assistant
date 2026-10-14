@@ -32,7 +32,8 @@ interface Message {
 const SUGGESTIONS = [
   "Quanto gastei com alimentação este mês?",
   "Como foi minha semana?",
-  "Quantas vezes treinei nas últimas quatro semanas?",
+  "Quantas vezes fiz musculação nas últimas quatro semanas?",
+  "Quanto corri nesta semana?",
   "Quanto estudei SQL neste mês?",
   "Qual matéria teve menos tempo de estudo nesta semana?",
   "Gastei 42 reais no Outback ontem",
@@ -41,7 +42,7 @@ const SUGGESTIONS = [
 const WELCOME: Message = {
   id: "welcome",
   role: "assistant",
-  text: "Oi! Posso responder sobre seus números e propor lançamentos de gasto. Experimente uma das sugestões abaixo.",
+  text: "Oi! Posso responder sobre seus números (finanças, musculação, corrida, estudos e leitura) e propor lançamentos de gasto. Experimente uma das sugestões abaixo.",
 };
 
 function AssistantScreenContent() {
@@ -158,7 +159,7 @@ function AssistantScreenContent() {
         {unavailable ? (
           <div role="status" className="flex gap-2 rounded-xl bg-muted p-4 text-sm">
             <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-            <p>O assistente não está configurado neste app. Lançamentos, treinos, estudos e leitura funcionam normalmente pelos formulários.</p>
+            <p>O assistente não está configurado neste app. Lançamentos, musculação, corrida, estudos e leitura funcionam normalmente pelos formulários.</p>
           </div>
         ) : null}
 

@@ -157,7 +157,7 @@ describe("segurança", () => {
   it("o catálogo de ferramentas enviado ao modelo não contém nenhuma de escrita além da proposta", async () => {
     const { provider } = await ask([{ content: "ok" }]);
     expect(provider.requests[0].tools.map((t) => t.name).sort()).toEqual([
-      "get_financial_summary", "get_reading_summary", "get_study_summary", "get_workout_summary", "propose_transaction",
+      "get_financial_summary", "get_reading_summary", "get_running_summary", "get_study_summary", "get_workout_summary", "propose_transaction",
     ]);
   });
 

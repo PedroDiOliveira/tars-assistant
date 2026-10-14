@@ -5,7 +5,7 @@ Registro das decisões que sustentam a passagem do protótipo (dados mock no nav
 README e o contexto do produto em [especificacao-app-pessoal.md](especificacao-app-pessoal.md) e
 [decisoes.md](decisoes.md).
 
-Status: **aceitas em 2026-10-07**. Alterar uma delas exige atualizar este arquivo. As decisões 11 a 20 vieram durante a
+Status: **aceitas em 2026-10-07**. Alterar uma delas exige atualizar este arquivo. As decisões 11 a 24 vieram durante a
 implementação, cada uma com o problema real que a motivou.
 
 ## Princípios
@@ -43,6 +43,10 @@ implementação, cada uma com o problema real que a motivou.
 | 18 | **Um adaptador só para provedores compatíveis com a OpenAI** (`openai-compatible.ts`) e uma fábrica por env (`AI_PROVIDER` = `groq`, `xai` ou `none`; `AI_MODEL`, `AI_API_KEY`, `AI_BASE_URL`). Nomes de variável genéricos | Trocar de provedor é mudar variável, não código; uma `XAI_API_KEY` guardando chave da Groq seria enganosa. A Groq tem camada gratuita (com limite de tokens por minuto) e a xAI é paga |
 | 19 | **O servidor entrega as datas prontas no prompt** (hoje, ontem, esta semana, semana passada, últimos 7/30 dias, este mês, mês passado), calculadas com as funções do app | Na avaliação com o modelo real, "esta semana" virou "2 a 8 de outubro" numa quarta-feira 7 (a semana vai de segunda 5 a domingo 11). Modelos erram aritmética de calendário; o servidor não |
 | 20 | **Cookie de sessão `httpOnly` + `SameSite=Lax`, e `Secure` conforme o protocolo da requisição** | O @supabase/ssr grava `httpOnly: false` porque o cliente de navegador precisa ler; este app não tem esse cliente, então o JavaScript da página não deve enxergar o token. `Secure` por protocolo (não por ambiente) para o app seguir abrindo por http na rede local |
+| 21 | **Corrida é uma entidade própria** (`running_sessions`), com distância e duração opcionais (NULL = "não informado", nunca zero) em metros e segundos inteiros | A musculação tem regras próprias (exige séries concluídas) e uma corrida registrada à mão não tem início, fim nem séries. Inteiros evitam divergência de arredondamento entre cadastro, meta, histórico e Home |
+| 22 | **Data futura é recusada pelo banco**, num gatilho com `private.app_now()` e `app_tz()`; o reducer a recusa com o `nowMs` do comando, e o teste de paridade exige a mesma mensagem | O horário do aparelho nunca decide uma regra do servidor (um relógio adiantado não libera uma data futura), e inserir direto na tabela também é barrado |
+| 23 | **O id de um registro novo nasce com o formulário e é reenviado em cada tentativa**, e uma falha desfaz a atualização otimista na hora | Bloquear toque duplo não cobre "o servidor salvou e a resposta se perdeu". E a releitura que reconcilia o cache falha justamente quando o servidor está fora do ar: sem o desfazer, o total otimista ficaria na tela |
+| 24 | **Migração antes do app.** As migrações são aditivas; o app novo recusa um banco sem a coleção nova (com a mensagem de aplicar a migração) em vez de abrir pela metade | Ver o passo a passo em [setup-supabase.md](setup-supabase.md#atualizar-um-projeto-que-já-está-em-uso-ordem-de-implantação) |
 
 ## Onde cada coisa mora
 

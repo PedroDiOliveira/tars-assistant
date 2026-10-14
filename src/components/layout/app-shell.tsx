@@ -21,12 +21,12 @@ function Frame({ children, chrome }: { children: ReactNode; chrome: boolean }) {
   );
 }
 
-/** Abas principais (Início, Finanças, Treino, Estudos): cabeçalho com marca/assistente/perfil e barra inferior. */
+/** Abas principais (Início, Finanças, Exercícios, Estudos): cabeçalho com marca/assistente/perfil e barra inferior. */
 export function TabsShell({ children }: { children: ReactNode }) {
   return <Frame chrome>{children}</Frame>;
 }
 
-/** Telas internas (sessão de treino, histórico, assistente, configurações): sem barra inferior. */
+/** Telas internas (sessão de musculação, históricos, assistente, configurações): sem barra inferior. */
 export function SubShell({ children }: { children: ReactNode }) {
   return <Frame chrome={false}>{children}</Frame>;
 }

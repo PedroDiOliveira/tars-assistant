@@ -88,6 +88,14 @@ async function commandsGeneratedByTheApp(): Promise<Command[]> {
   await a.updateBook(BOOK, { title: "Livro revisado", author: "Autora", totalPages: 400, initialPage: 10 });
   await a.deleteBook(BOOK);
   await a.updateReadingSession(id, { occurredOn: "2026-10-07", startPage: 50, endPage: 80, notes: "Capítulo 3" });
+  // corrida: distância/duração/observação opcionais; o id do formulário é reenviado nas novas tentativas
+  await a.addRunningSession({ occurredOn: "2026-10-07", distanceMeters: 5200, durationSeconds: 1800, notes: "Parque" });
+  await a.addRunningSession({ occurredOn: "2026-10-06" });
+  await a.addRunningSession({ occurredOn: "2026-10-05", distanceMeters: 5000, id });
+  await a.updateRunningSession(id, { occurredOn: "2026-10-05", distanceMeters: 5000 });
+  await a.updateRunningSession(id, { occurredOn: "2026-10-05" });
+  await a.deleteRunningSession(id);
+  await a.setGoal({ kind: "running_meters", scopeId: null, validFrom: "2026-10-05", target: 20_000 });
   return captured;
 }
 
@@ -108,7 +116,8 @@ describe("o que o app gera passa no schema", () => {
     expect([...types].sort()).toEqual([
       "book.add", "book.delete", "book.setStatus", "book.update", "category.add", "category.archive", "category.update",
       "exercise.add", "exercise.archive", "exercise.update", "goal.set", "plan.archive", "plan.save",
-      "reading.addSession", "reading.deleteSession", "reading.updateSession", "study.discard", "study.finish",
+      "reading.addSession", "reading.deleteSession", "reading.updateSession", "running.addSession", "running.deleteSession",
+      "running.updateSession", "study.discard", "study.finish",
       "study.pause", "study.resume", "study.start", "studySession.add", "studySession.delete", "studySession.update",
       "subject.add", "subject.archive", "subject.update", "template.add", "template.delete", "transaction.add",
       "transaction.delete", "transaction.update", "workout.deleteSession", "workout.finish",
@@ -272,6 +281,73 @@ describe("recusa o que é inválido", () => {
     it("a ordem das páginas NÃO é validada aqui: quem decide é o domínio/banco, com a mesma mensagem", () => {
       expect(reject({ type: "reading.addSession", session: { id: uid(), bookId: BOOK, occurredOn: "2026-10-07", startPage: 50, endPage: 40 } }))
         .toMatchObject({ ok: true });
+    });
+  });
+
+  describe("corrida", () => {
+    const add = (over: Record<string, unknown> = {}) => ({
+      type: "running.addSession",
+      nowMs: NOW,
+      session: { id: uid(), occurredOn: "2026-10-07", ...over },
+    });
+    const update = (fields: Record<string, unknown>) => ({ type: "running.updateSession", id: uid(), nowMs: NOW, fields: { occurredOn: "2026-10-07", ...fields } });
+
+    it("só a data basta: distância, duração e observação são opcionais", () => {
+      expect(reject(add())).toMatchObject({ ok: true });
+      expect(reject(add({ distanceMeters: 5200, durationSeconds: 1800, notes: "Parque" }))).toMatchObject({ ok: true });
+      expect(reject(update({}))).toMatchObject({ ok: true });
+    });
+
+    it("distância: zero, negativa, fracionada, nula, em texto e acima de 500 km são recusadas", () => {
+      expect(reject(add({ distanceMeters: 0 }))).toMatchObject({ ok: false, error: "A distância deve ser maior que zero." });
+      expect(reject(add({ distanceMeters: -5 }))).toMatchObject({ ok: false });
+      expect(reject(add({ distanceMeters: 5.5 }))).toMatchObject({ ok: false, error: "A distância deve estar em metros inteiros." });
+      expect(reject(add({ distanceMeters: null }))).toMatchObject({ ok: false }); // ausente é omitir a chave, nunca null
+      expect(reject(add({ distanceMeters: "5200" }))).toMatchObject({ ok: false });
+      expect(reject(add({ distanceMeters: 500_001 }))).toMatchObject({ ok: false, error: "A distância máxima por corrida é 500 km." });
+      expect(reject(add({ distanceMeters: 500_000 }))).toMatchObject({ ok: true });
+      expect(reject(add({ distanceMeters: 1 }))).toMatchObject({ ok: true });
+      expect(reject(update({ distanceMeters: 0 }))).toMatchObject({ ok: false });
+    });
+
+    it("duração: zero, negativa, fracionada e acima de 24 h são recusadas", () => {
+      expect(reject(add({ durationSeconds: 0 }))).toMatchObject({ ok: false, error: "A duração deve ser maior que zero." });
+      expect(reject(add({ durationSeconds: -1 }))).toMatchObject({ ok: false });
+      expect(reject(add({ durationSeconds: 90.5 }))).toMatchObject({ ok: false });
+      expect(reject(add({ durationSeconds: null }))).toMatchObject({ ok: false });
+      expect(reject(add({ durationSeconds: 86_401 }))).toMatchObject({ ok: false, error: "A duração máxima por corrida é de 24 horas." });
+      expect(reject(add({ durationSeconds: 86_400 }))).toMatchObject({ ok: true });
+      expect(reject(add({ durationSeconds: 1 }))).toMatchObject({ ok: true });
+    });
+
+    it("data, observação, id e campos desconhecidos", () => {
+      expect(reject(add({ occurredOn: "2026-02-30" }))).toMatchObject({ ok: false, error: "Data inválida." });
+      expect(reject(add({ notes: "x".repeat(201) }))).toMatchObject({ ok: false });
+      expect(reject(add({ notes: "x".repeat(200) }))).toMatchObject({ ok: true });
+      expect(reject(add({ id: "run-1" }))).toMatchObject({ ok: false, error: "Identificador inválido." });
+      expect(reject(add({ userId: uid() }))).toMatchObject({ ok: false }); // um userId plantado nunca é ignorado
+      expect(reject(add({ pace: 360 }))).toMatchObject({ ok: false }); // o ritmo é calculado, nunca enviado
+      expect(reject({ ...add(), nowMs: undefined })).toMatchObject({ ok: false });
+    });
+
+    it("excluir recebe só o id", () => {
+      expect(reject({ type: "running.deleteSession", id: uid() })).toMatchObject({ ok: true });
+      expect(reject({ type: "running.deleteSession", id: "x" })).toMatchObject({ ok: false });
+    });
+
+    it("meta de corrida: segunda-feira, em metros, de 0 (removida) até 1.000 km", () => {
+      const goal = (over: Record<string, unknown>) => ({
+        type: "goal.set",
+        goal: { id: uid(), kind: "running_meters", scopeId: null, validFrom: "2026-10-05", target: 20_000, ...over },
+      });
+      expect(reject(goal({}))).toMatchObject({ ok: true });
+      expect(reject(goal({ target: 12_500 }))).toMatchObject({ ok: true });
+      expect(reject(goal({ target: 0 }))).toMatchObject({ ok: true });
+      expect(reject(goal({ validFrom: "2026-10-01" }))).toMatchObject({ ok: false, error: "A vigência deve começar numa segunda-feira." });
+      expect(reject(goal({ target: 1_000_000 }))).toMatchObject({ ok: true });
+      expect(reject(goal({ target: 1_000_001 }))).toMatchObject({ ok: false, error: "A meta semanal de corrida pode ir até 1.000 km." });
+      expect(reject(goal({ target: 12.5 }))).toMatchObject({ ok: false });
+      expect(reject(goal({ scopeId: uid() }))).toMatchObject({ ok: false, error: "Esta meta não tem escopo." });
     });
   });
 });

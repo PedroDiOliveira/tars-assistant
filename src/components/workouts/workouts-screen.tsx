@@ -71,7 +71,7 @@ function WorkoutsScreenContent() {
 
   return (
     <div data-module="workout" className="space-y-6 px-4">
-      <h1 className="pt-1 text-[1.75rem] leading-tight font-bold tracking-tight">Treino</h1>
+      {/* O título "Exercícios" e as abas Musculação | Corrida vêm do layout da rota. */}
 
       {/* Destaque da semana */}
       <Surface className="p-5">
@@ -96,7 +96,7 @@ function WorkoutsScreenContent() {
             <p className="mt-2 text-sm text-muted-foreground">Toque para definir uma meta semanal</p>
           )}
         </button>
-        <WeekDots dots={week.dots} size="lg" className="mt-4" />
+        <WeekDots dots={week.dots} activity="treino" size="lg" className="mt-4" />
         {week.streak.weeks > 0 ? (
           <p className="mt-4 flex items-center gap-1.5 border-t pt-3 text-sm font-medium text-m-ink">
             <Flame className="size-4" aria-hidden />
@@ -243,7 +243,7 @@ function WorkoutsScreenContent() {
       <GoalSheet
         open={goalOpen}
         onOpenChange={setGoalOpen}
-        target={{ kind: "workout_sessions", scopeId: null, title: "Meta semanal de treino", current: week.target }}
+        target={{ kind: "workout_sessions", scopeId: null, title: "Meta semanal de musculação", current: week.target }}
       />
       <ConfirmDialog
         open={replacePlan !== null}

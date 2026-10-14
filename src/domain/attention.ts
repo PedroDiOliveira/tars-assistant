@@ -2,16 +2,18 @@ import { daysLeftInWeek, monthOf, weekdayIndex, type DateKey } from "@/lib/dates
 import { formatMinutes, pluralize } from "@/lib/format";
 import { formatBRLCompact, formatSignedBRL } from "./money";
 import { progressPercent } from "./progress";
+import { formatDistance } from "./running";
 import {
   financeSummary,
   readingWeekSummary,
+  runningWeekSummary,
   studyWeekSummary,
   workoutSummary,
   type DataSnapshot,
 } from "./summary";
 
 export type AttentionTone = "danger" | "warn" | "info" | "success";
-export type AttentionModule = "finance" | "workout" | "study" | "reading";
+export type AttentionModule = "finance" | "workout" | "running" | "study" | "reading";
 
 export interface AttentionItem {
   id: string;
@@ -40,7 +42,7 @@ export function buildAttention(data: DataSnapshot, today: DateKey, max = 4): Att
         id: "workout-met",
         tone: "success",
         module: "workout",
-        text: `Meta de treino batida: ${workout.done} de ${workout.target} nesta semana.`,
+        text: `Meta de musculação batida: ${workout.done} de ${workout.target} treinos nesta semana.`,
         href: "/treino",
       });
     } else {
@@ -50,8 +52,32 @@ export function buildAttention(data: DataSnapshot, today: DateKey, max = 4): Att
         id: "workout-pace",
         tone,
         module: "workout",
-        text: `Faltam ${workout.remaining} ${pluralize(workout.remaining, "treino", "treinos")} para a meta e ${dayLabel} até domingo.`,
+        text: `Faltam ${workout.remaining} ${pluralize(workout.remaining, "treino", "treinos")} de musculação para a meta e ${dayLabel} até domingo.`,
         href: "/treino",
+      });
+    }
+  }
+
+  // Corrida: só o que é objetivo (quanto falta para a meta). Sem recomendação de treino nem compensação de distância.
+  const running = runningWeekSummary(data, today);
+  // Só corridas sem distância: o total de km é desconhecido, então "faltam X km" seria uma afirmação sem base.
+  const runningKnown = running.runs === 0 || running.hasDistance;
+  if (running.targetMeters && runningKnown) {
+    if (running.remainingMeters === 0) {
+      items.push({
+        id: "running-met",
+        tone: "success",
+        module: "running",
+        text: `Meta de corrida batida: ${formatDistance(running.distanceMeters)} de ${formatDistance(running.targetMeters)} nesta semana.`,
+        href: "/treino/corrida",
+      });
+    } else if (daysLeft <= 2) {
+      items.push({
+        id: "running-pace",
+        tone: "info",
+        module: "running",
+        text: `Faltam ${formatDistance(running.remainingMeters)} para sua meta semanal de corrida e ${dayLabel} até domingo.`,
+        href: "/treino/corrida",
       });
     }
   }

@@ -4,7 +4,7 @@
 
 # Tars
 
-**A personal goal-tracking app for money, training, studying and reading — built mobile-first.**
+**A personal goal-tracking app for money, exercise (strength and running), studying and reading — built mobile-first.**
 
 One screen that answers a single question: *am I on pace this week?*
 
@@ -12,7 +12,7 @@ One screen that answers a single question: *am I on pace this week?*
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
-[![Tests](https://img.shields.io/badge/tests-499%20unit%20%2B%20170%20e2e-0B6B4F?style=flat-square)](#how-i-verified-it)
+[![Tests](https://img.shields.io/badge/tests-698%20unit%20%2B%20358%20e2e-0B6B4F?style=flat-square)](#how-i-verified-it)
 
 <img src="docs/screenshots/home.png" width="230" alt="Home screen" />
 <img src="docs/screenshots/finance.png" width="230" alt="Finance screen" />
@@ -89,6 +89,12 @@ Starting a workout pre-fills every set with **what you lifted last time**, so co
 <img src="docs/screenshots/workout-session.png" width="250" alt="Live session with rest timer" />
 </div>
 
+### Exercises — strength and running
+
+The bottom-nav tab is **Exercises**, with two real routes inside it, like Study and Reading: **Strength** (`/treino`, the session screen above) and **Running** (`/treino/corrida`). Running is logged by hand and as fast as possible: one button at the top, a date that defaults to today, and **distance is optional** — "I ran today" is a complete record, and the distance can be filled in (or corrected, or removed) later. Duration and a note live under a "details" fold that opens by itself when you edit a run that has them.
+
+What the screen answers: how far this week (against an optional weekly km goal), how many runs, on how many days, and the latest runs — with a full, paginated history. Pace (min/km) is *derived* from distance and duration, never stored.
+
 ### Studying and reading
 
 The study timer is driven by timestamps, not by a running counter, so it survives a reload, a background switch and a locked screen. Reading is logged as "I was on page X, now I'm on page Y" — the app derives pages read, so edits and deletions always recompute cleanly.
@@ -123,6 +129,11 @@ This is the part of the spec I care most about, and where the tests are concentr
 | Sessions snapshot the plan | Renaming or reordering a workout plan must not rewrite sessions already performed | [`domain/workouts.ts`](src/domain/workouts.ts) |
 | The timer stores timestamps + accumulated time | A counter stops when the phone sleeps; a timestamp does not | [`domain/studies.ts`](src/domain/studies.ts) |
 | Pages read = `end − start` | The page you were on when you registered the book is not "read this week" | [`domain/reading.ts`](src/domain/reading.ts) |
+| A run's **distance is optional and never zero** | "I ran, but I don't know how far" must not become "0 km": a run without distance still counts as a run and marks the day, but adds no kilometres, and no screen shows a 0 km total built from missing data | [`domain/running.ts`](src/domain/running.ts), [`running-text.ts`](src/domain/running-text.ts) |
+| Distance is **integer metres**, parsed from text without floats | `5,2` and `5.2` are both 5200 m, `1,005` is 1005 m (a float gives 1004.9999…), `12,5` never becomes 125, and an unparseable entry is refused instead of silently turned into another number | [`domain/running.ts`](src/domain/running.ts) |
+| Runs, active days and distance are **three different counts** | Two runs on one day are 2 runs, 1 day, and the sum of the *reported* distances | [`domain/summary.ts`](src/domain/summary.ts) |
+| A run can't be in the future — **decided by the server's clock** | A phone with the wrong clock must not be able to log tomorrow's run; the database trigger uses the app's time zone, and also blocks direct table writes | [`migrations/…_running.sql`](supabase/migrations/20261014000013_running.sql) |
+| A retry after a lost response **doesn't duplicate** | The run's id is created when the form opens and re-sent on every retry, so "saved on the server, the answer never arrived" is the same record, not a second one | [`components/running/run-sheet.tsx`](src/components/running/run-sheet.tsx) |
 | Only **finished** sessions count toward goals | A workout in progress is not an achievement | [`domain/summary.ts`](src/domain/summary.ts) |
 | Progress bars clamp to 0–100%, the real number stays in text | A 208% month should read as 208%, while the bar stays sane | [`domain/progress.ts`](src/domain/progress.ts) |
 | The weekly streak is forgiving | The current, unfinished week never breaks a streak — motivation shouldn't punish Tuesday | [`domain/streaks.ts`](src/domain/streaks.ts) |
@@ -184,9 +195,9 @@ Supabase (Postgres, Auth, RLS) behind Next.js route handlers and Server Actions,
 
 | Layer | What it covers |
 | --- | --- |
-| **525 unit and database tests** (Vitest) | Money arithmetic, timezone boundaries, goal validity, timer logic, command reducers and schemas, the AI tools and orchestration (with a scripted model), the OpenAI-compatible adapter (Groq / xAI) against a local fake API, the service worker policy (running the real `sw.js` in a sandbox), security headers — plus **a real Postgres (PGlite) running the actual migrations**: row-level security with two users, constraints, idempotency, midnight in the app's timezone, AI usage limits, and the reducer-vs-SQL parity suite |
-| **27 demo-mode end-to-end flows** ([`e2e/flows.mjs`](e2e/flows.mjs), Playwright) | Logging and deleting an expense and watching totals recompute, a full workout including a reload mid-session, the timer surviving a refresh, reading 30 → 50 counting as 20 pages, and double-tap protection on every confirm |
-| **145 live-mode end-to-end checks** ([`e2e/live.mjs`](e2e/live.mjs)) | The real production build against a **fake Supabase** (Auth + PostgREST over the real migrations) and a **fake AI API**: login and password reset (including an email scanner opening the link first), R$ 3.500 − R$ 42 = R$ 3.458 persisting across reloads, the server going down mid-save, a timer visible from a second device with a skewed clock, creating plans/categories/books from an empty account, the assistant end to end, usage limits stopping the provider call, a deploy with AI off, security headers, export, health, cron auth, and the offline fallback |
+| **698 unit and database tests** (Vitest) | Money arithmetic, timezone boundaries, goal validity, timer logic, command reducers and schemas, the AI tools and orchestration (with a scripted model), the OpenAI-compatible adapter (Groq / xAI) against a local fake API, the service worker policy (running the real `sw.js` in a sandbox), security headers — plus **a real Postgres (PGlite) running the actual migrations**: row-level security with two users, constraints, idempotency, midnight in the app's timezone, AI usage limits, and the reducer-vs-SQL parity suite |
+| **109 demo-mode end-to-end flows** ([`e2e/flows.mjs`](e2e/flows.mjs) and [`e2e/running.mjs`](e2e/running.mjs), Playwright) | Logging and deleting an expense and watching totals recompute, a full workout including a reload mid-session, the timer surviving a refresh, reading 30 → 50 counting as 20 pages, and double-tap protection on every confirm |
+| **173 live-mode end-to-end checks** ([`e2e/live.mjs`](e2e/live.mjs)) | The real production build against a **fake Supabase** (Auth + PostgREST over the real migrations) and a **fake AI API**: login and password reset (including an email scanner opening the link first), R$ 3.500 − R$ 42 = R$ 3.458 persisting across reloads, the server going down mid-save, a timer visible from a second device with a skewed clock, creating plans/categories/books from an empty account, the assistant end to end, usage limits stopping the provider call, a deploy with AI off, security headers, export, health, cron auth, and the offline fallback |
 | **Build & static checks** | `tsc --noEmit`, ESLint (also on the E2E scripts), `npm audit` for production dependencies, and a build that **fails** when the live-mode configuration is incomplete |
 
 Two things I want to be upfront about. The fakes prove the integration without keys, but they are not Supabase or the model provider, so on 2026-10-07 I also ran the app **once against the real services** with a throwaway user (created and deleted by a script kept outside the repo, so the service key never touched the app): the migrations applied to the real project, row-level security was confirmed on all 18 tables and anonymous access to tables and `get_snapshot` is refused, login set an `httpOnly` session cookie verified through the project's JWKS, R$ 3.500 − R$ 42 = R$ 3.458 persisted in the real Postgres, and the assistant answered and proposed through the real Groq API (and its usage was recorded in `ai_usage`). **Still not validated:** a physical iPhone, a real Vercel deploy, and the password-reset email through Supabase's real mailer. The test pass also earned its keep: the live suite caught a login page that reloaded in a loop after a 401, a malformed `Permissions-Policy` header, and an unused font; the real-service run caught the login form clearing the e-mail after a wrong password, and a session cookie readable by JavaScript.
@@ -194,6 +205,7 @@ Two things I want to be upfront about. The fakes prove the integration without k
 ```bash
 npm test                # unit + database tests (no Docker needed)
 npm run test:e2e        # demo-mode flows (needs `npm run dev` running)
+npm run test:e2e:running # running flows in demo mode (same server)
 npm run test:e2e:live   # live-mode flows (builds and starts everything itself)
 npm run test:splash     # launch, installed resume, accessibility and recovery flows
 npm run lint            # ESLint
@@ -223,12 +235,13 @@ If `npm run dev` restarts in a loop with `ENOSPC … file watchers`, the system'
 
 ## Status and what comes next
 
-**Done:** the full interface; every business rule, tested; accounts and persistence on Supabase with row-level security; create/edit/archive for plans, exercises, categories, subjects and books; the AI assistant with confirmation, limits and a manual fallback; backup export; installable PWA with an honest offline page; strict security headers; CI that runs everything above.
+**Done:** the full interface (including running — manual log, weekly km goal, history); every business rule, tested; accounts and persistence on Supabase with row-level security; create/edit/archive for plans, exercises, categories, subjects and books; the AI assistant with confirmation, limits and a manual fallback; backup export; installable PWA with an honest offline page; strict security headers; CI that runs everything above.
 
 **Still pending, stated plainly:**
 
 | Pending | Why it matters |
 | --- | --- |
+| Applying the **running migration** (`20261014000013_running.sql`) to the real Supabase project | It was exercised on PGlite and on the fake Supabase (RLS, constraints, idempotency, the server-side future-date rule, reducer-vs-SQL parity), but not on the real project. Order matters: `npm run db:push` first, deploy the app after ([`docs/setup-supabase.md`](docs/setup-supabase.md#atualizar-um-projeto-que-já-está-em-uso-ordem-de-implantação)) |
 | Password-reset email and a real Vercel deploy | The first real-service run covered migrations, auth, data and the assistant; the reset email depends on the Supabase email template and redirect URLs set in the dashboard |
 | Validation on a physical iPhone | Safe areas, keyboard, the splash handoff and lock-screen timer behaviour are only verified in a desktop browser |
 | Groq free-tier limits | The free tier caps tokens per minute (about 8K when I tested), so a burst of questions can be refused with a clear message; usage limits in the app and the manual forms are the fallback |

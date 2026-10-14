@@ -49,6 +49,7 @@ function useData(): DataSnapshot {
       studySessions: s.studySessions,
       books: s.books,
       readingSessions: s.readingSessions,
+      runningSessions: s.runningSessions,
     })),
   );
 }

@@ -23,4 +23,5 @@ export const EMPTY_APP_DATA: AppData = {
   timer: null,
   books: [],
   readingSessions: [],
+  runningSessions: [],
 };

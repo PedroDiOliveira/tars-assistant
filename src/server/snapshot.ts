@@ -52,7 +52,7 @@ const template = z.object({
 
 const goal = z.object({
   id,
-  kind: z.enum(["savings", "category_budget", "workout_sessions", "study_minutes", "reading_pages"]),
+  kind: z.enum(["savings", "category_budget", "workout_sessions", "study_minutes", "reading_pages", "running_meters"]),
   scopeId: id.nullable(),
   validFrom: dateKey,
   target: z.number().int(),
@@ -150,6 +150,17 @@ const readingSession = z
   })
   .transform(clean);
 
+const runningSession = z
+  .object({
+    id,
+    occurredOn: dateKey,
+    // NULL no banco = "não informado": some da chave (nunca vira 0).
+    distanceMeters: absent(z.number().int()),
+    durationSeconds: absent(z.number().int()),
+    notes: absent(z.string()),
+  })
+  .transform(clean);
+
 const snapshotSchema = z.object({
   serverNow: z.number(),
   profile: z.object({ displayName: z.string() }).nullable(),
@@ -165,6 +176,7 @@ const snapshotSchema = z.object({
   timer: timer.nullable(),
   books: z.array(book),
   readingSessions: z.array(readingSession),
+  runningSessions: z.array(runningSession),
 });
 
 export interface Snapshot {

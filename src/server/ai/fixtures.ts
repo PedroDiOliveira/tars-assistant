@@ -46,6 +46,13 @@ export function sampleData(over: Partial<AppData> = {}): AppData {
       { id: "w2", planId: null, nameSnapshot: "Treino B", startedAt: 3, finishedAt: 4, occurredOn: "2026-10-07", exercises: [] },
       { id: "w3", planId: null, nameSnapshot: "Treino A", startedAt: 5, finishedAt: 6, occurredOn: "2026-09-28", exercises: [] },
     ],
+    runningSessions: [
+      { id: "run1", occurredOn: "2026-10-05", distanceMeters: 5_000, durationSeconds: 1_800 },
+      // duas corridas no mesmo dia (3 km informados + uma sem distância): 2 corridas, 1 dia
+      { id: "run2", occurredOn: "2026-10-07", distanceMeters: 3_000 },
+      { id: "run3", occurredOn: "2026-10-07", notes: "Esqueci o relógio" },
+      { id: "run4", occurredOn: "2026-09-30", distanceMeters: 8_000, durationSeconds: 2_900 },
+    ],
     ...over,
   };
 }

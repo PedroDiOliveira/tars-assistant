@@ -474,6 +474,100 @@ describe("paridade — livros e leituras (edição)", () => {
   });
 });
 
+/* ---------- corrida (migração 0013) ---------- */
+
+describe("paridade — corrida", () => {
+  const NOON = Date.UTC(2026, 9, 14, 15, 0); // 14/10/2026 12:00 em São Paulo
+  type Run = { id: string; occurredOn: string; distanceMeters?: number; durationSeconds?: number; notes?: string };
+  const addRun = (session: Run, nowMs = NOON): Command => ({ type: "running.addSession", session, nowMs });
+  const editRun = (id: string, fields: Omit<Run, "id">, nowMs = NOON): Command => ({ type: "running.updateSession", id, fields, nowMs });
+
+  it("adicionar (só a data e completa), repetir, editar substituindo campos, mover de semana, excluir e excluir de novo", async () => {
+    const s = await Scenario.start();
+    const [dateOnly, full] = [uid(), uid()];
+
+    await s.step(addRun({ id: dateOnly, occurredOn: "2026-10-14" }));
+    const complete = addRun({ id: full, occurredOn: "2026-10-13", distanceMeters: 5200, durationSeconds: 1800, notes: "Parque" });
+    await s.step(complete);
+    await s.step(complete); // repetição (toque duplo / resposta perdida): não duplica
+    await s.step(addRun({ id: full, occurredOn: "2026-10-12", distanceMeters: 1 })); // mesmo id, outro conteúdo: o primeiro vale
+    expect(s.state.runningSessions).toHaveLength(2);
+    expect(s.state.runningSessions.find((r) => r.id === dateOnly)).toEqual({ id: dateOnly, occurredOn: "2026-10-14" });
+
+    await s.step(editRun(dateOnly, { occurredOn: "2026-10-14", distanceMeters: 7500 })); // adiciona a distância que faltava
+    await s.step(editRun(full, { occurredOn: "2026-10-13", durationSeconds: 1800, notes: "Parque" })); // remove a distância
+    expect(s.state.runningSessions.find((r) => r.id === full)).toEqual({ id: full, occurredOn: "2026-10-13", durationSeconds: 1800, notes: "Parque" });
+    await s.step(editRun(full, { occurredOn: "2026-10-09" })); // outra semana; remove duração e observação
+    expect(s.state.runningSessions.find((r) => r.id === full)).toEqual({ id: full, occurredOn: "2026-10-09" });
+
+    await s.step({ type: "running.deleteSession", id: full });
+    await s.step({ type: "running.deleteSession", id: full }); // já não existe: não é erro
+    await s.step({ type: "running.deleteSession", id: uid() });
+    expect(s.state.runningSessions.map((r) => r.id)).toEqual([dateOnly]);
+  });
+
+  it("observação vazia e campos opcionais ausentes ficam ausentes nos dois lados (nunca '' nem 0)", async () => {
+    const s = await Scenario.start();
+    const id = uid();
+    await s.step(addRun({ id, occurredOn: "2026-10-14", distanceMeters: undefined, durationSeconds: undefined, notes: "" }));
+    expect(s.state.runningSessions[0]).toEqual({ id, occurredOn: "2026-10-14" });
+    await s.step(editRun(id, { occurredOn: "2026-10-14", notes: "" }));
+    expect(s.state.runningSessions[0]).toEqual({ id, occurredOn: "2026-10-14" });
+  });
+
+  it("recusas com a MESMA mensagem: data futura (registrar e mover) e corrida inexistente", async () => {
+    const s = await Scenario.start();
+    const id = uid();
+    const future = "Não é possível registrar uma corrida em uma data futura.";
+    expect((await s.step(addRun({ id, occurredOn: "2026-10-15" }))).error).toBe(future);
+    await s.step(addRun({ id, occurredOn: "2026-10-14", distanceMeters: 5000 }));
+    expect((await s.step(editRun(id, { occurredOn: "2026-10-20", distanceMeters: 5000 }))).error).toBe(future);
+    expect((await s.step(editRun(uid(), { occurredOn: "2026-10-14" }))).error).toBe("Corrida não encontrada.");
+    expect(s.state.runningSessions).toHaveLength(1);
+  });
+
+  it("o fuso decide o que é hoje: 23h30 em São Paulo (já dia seguinte em UTC) e 00h30", async () => {
+    const s = await Scenario.start();
+    const late = Date.UTC(2026, 9, 15, 2, 30); // 14/10 23:30 em SP
+    await s.step(addRun({ id: uid(), occurredOn: "2026-10-14" }, late));
+    expect((await s.step(addRun({ id: uid(), occurredOn: "2026-10-15" }, late))).error).toMatch(/data futura/);
+    const after = Date.UTC(2026, 9, 15, 3, 30); // 15/10 00:30 em SP
+    await s.step(addRun({ id: uid(), occurredOn: "2026-10-15" }, after));
+    expect((await s.step(addRun({ id: uid(), occurredOn: "2026-10-16" }, after))).error).toMatch(/data futura/);
+  });
+
+  it("corrigir sem mexer na data não depende do relógio (mesma regra nos dois lados)", async () => {
+    const s = await Scenario.start();
+    const id = uid();
+    await s.step(addRun({ id, occurredOn: "2026-10-14", distanceMeters: 5000 }));
+    const clockBehind = Date.UTC(2026, 9, 13, 15); // a data guardada parece futura
+    await s.step(editRun(id, { occurredOn: "2026-10-14", distanceMeters: 5500 }, clockBehind));
+    expect(s.state.runningSessions[0].distanceMeters).toBe(5500);
+    expect((await s.step(editRun(id, { occurredOn: "2026-10-15", distanceMeters: 5500 }, clockBehind))).error).toMatch(/data futura/);
+  });
+
+  it("meta semanal de corrida: nova, vigência futura, substituição (mantém o id) e remoção (0), em metros", async () => {
+    const s = await Scenario.start();
+    const goal = (validFrom: string, target: number): Command => ({
+      type: "goal.set", goal: { id: uid(), kind: "running_meters", scopeId: null, validFrom, target },
+    });
+    await s.step(goal("2026-10-12", 20_000));
+    await s.step(goal("2026-10-12", 12_500)); // mesma vigência: substitui
+    await s.step(goal("2026-10-19", 25_000)); // próxima semana
+    await s.step(goal("2026-10-26", 0)); // removida daqui para a frente
+    expect(s.state.goals.filter((g) => g.kind === "running_meters").map((g) => [g.validFrom, g.target])).toEqual([
+      ["2026-10-12", 12_500], ["2026-10-19", 25_000], ["2026-10-26", 0],
+    ]);
+  });
+
+  it("corridas não tocam as demais coleções (treinos, estudos, leituras)", async () => {
+    const s = await Scenario.start();
+    const before = JSON.stringify({ ...s.state, runningSessions: [] });
+    await s.step(addRun({ id: uid(), occurredOn: "2026-10-14", distanceMeters: 3000 }));
+    expect(JSON.stringify({ ...s.state, runningSessions: [] })).toBe(before);
+  });
+});
+
 describe("snapshot", () => {
   it("devolve o relógio do servidor (para corrigir a diferença do relógio do aparelho)", async () => {
     const s = await Scenario.start();

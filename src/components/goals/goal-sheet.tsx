@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/shared/segmented";
 import { Sheet, SheetFooter } from "@/components/shared/sheet";
+import { DistanceField } from "@/components/shared/distance-field";
 import { GOAL_PERIOD } from "@/domain/goals";
 import { centsFromDigits, formatBRL } from "@/domain/money";
+import { formatDistance, kmInputText, MAX_WEEKLY_GOAL_METERS, parseDistanceKm } from "@/domain/running";
 import type { GoalKind } from "@/domain/types";
 import { useActions, useToday } from "@/data";
 import { addDays, addMonths, monthOf, monthStart, weekStart } from "@/lib/dates";
@@ -18,7 +20,7 @@ export interface GoalTarget {
   scopeId: string | null;
   /** nome exibido no título, ex.: "Treinos por semana" */
   title: string;
-  /** meta vigente hoje (centavos, sessões, minutos ou páginas) */
+  /** meta vigente hoje (centavos, sessões, minutos, páginas ou metros) */
   current: number | null;
 }
 
@@ -34,6 +36,7 @@ const UNIT: Record<GoalKind, string> = {
   workout_sessions: "treinos por semana",
   study_minutes: "minutos por semana",
   reading_pages: "páginas por semana",
+  running_meters: "km por semana",
 };
 
 export function GoalSheet({ open, onOpenChange, target }: GoalSheetProps) {
@@ -55,19 +58,40 @@ function GoalForm({ target, onDone }: { target: GoalTarget; onDone: () => void }
   const isMoney = target.kind === "savings" || target.kind === "category_budget";
   const monthly = GOAL_PERIOD[target.kind] === "month";
 
-  const [value, setValue] = useState<number>(target.current ?? 0);
+  // A meta de corrida é guardada em METROS inteiros mas digitada em KM, com vírgula ou ponto ("12,5"): o campo é de
+  // texto e passa por `parseDistanceKm`. Os demais (dinheiro, sessões, minutos, páginas) continuam só com dígitos.
+  const isRunning = target.kind === "running_meters";
+  const [kmText, setKmText] = useState(kmInputText(target.current ?? undefined));
+  const km = parseDistanceKm(kmText);
+  const runningMeters = km.ok ? km.meters : null;
+  const runningError = !km.ok
+    ? kmText.trim() !== ""
+      ? km.error
+      : null
+    : runningMeters !== null && runningMeters > MAX_WEEKLY_GOAL_METERS
+      ? `A meta semanal pode ir até ${formatDistance(MAX_WEEKLY_GOAL_METERS)}.`
+      : null;
+
+  const [numeric, setNumeric] = useState<number>(isRunning ? 0 : (target.current ?? 0));
+  const value = isRunning ? (runningMeters ?? 0) : numeric;
+  const canSave = isRunning ? runningMeters !== null && runningMeters > 0 && runningError === null : numeric > 0;
   const [from, setFrom] = useState<"now" | "next">("now");
 
   const currentStart = monthly ? monthStart(monthOf(today)) : weekStart(today);
   const nextStart = monthly ? monthStart(addMonths(monthOf(today), 1)) : addDays(weekStart(today), 7);
 
+  const [saving, setSaving] = useState(false);
+
   async function save(nextValue: number) {
+    if (saving) return;
+    setSaving(true);
     const result = await setGoal({
       kind: target.kind,
       scopeId: target.scopeId,
       validFrom: from === "now" ? currentStart : nextStart,
       target: nextValue,
     });
+    setSaving(false);
     if (!notify(result, nextValue > 0 ? "Meta atualizada" : "Meta removida")) return;
     onDone();
   }
@@ -78,13 +102,29 @@ function GoalForm({ target, onDone }: { target: GoalTarget; onDone: () => void }
         <label htmlFor="goal-value" className="text-sm font-medium">
           {isMoney ? "Valor da meta (por mês)" : `Meta (${UNIT[target.kind]})`}
         </label>
-        {isMoney ? (
+        {isRunning ? (
+          <>
+            <DistanceField
+              id="goal-value"
+              value={kmText}
+              onChange={setKmText}
+              invalid={runningError !== null}
+              describedBy={runningError ? "goal-value-error" : undefined}
+              placeholder="Ex.: 20 ou 12,5"
+            />
+            {runningError ? (
+              <p id="goal-value-error" role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger-ink">
+                {runningError}
+              </p>
+            ) : null}
+          </>
+        ) : isMoney ? (
           <Input
             id="goal-value"
             inputMode="numeric"
             autoComplete="off"
-            value={formatBRL(value)}
-            onChange={(e) => setValue(centsFromDigits(e.target.value))}
+            value={formatBRL(numeric)}
+            onChange={(e) => setNumeric(centsFromDigits(e.target.value))}
             className="h-14 text-center text-2xl font-semibold tabular-nums"
           />
         ) : (
@@ -92,9 +132,9 @@ function GoalForm({ target, onDone }: { target: GoalTarget; onDone: () => void }
             id="goal-value"
             inputMode="numeric"
             autoComplete="off"
-            value={value === 0 ? "" : String(value)}
+            value={numeric === 0 ? "" : String(numeric)}
             placeholder="0"
-            onChange={(e) => setValue(Number(e.target.value.replace(/\D/g, "")) || 0)}
+            onChange={(e) => setNumeric(Number(e.target.value.replace(/\D/g, "")) || 0)}
             className="h-14 text-center text-2xl font-semibold tabular-nums"
           />
         )}
@@ -117,11 +157,11 @@ function GoalForm({ target, onDone }: { target: GoalTarget; onDone: () => void }
       </div>
 
       <SheetFooter>
-        <Button size="lg" disabled={value <= 0} onClick={() => save(value)}>
+        <Button size="lg" disabled={!canSave || saving} onClick={() => save(value)}>
           Salvar meta
         </Button>
         {target.current ? (
-          <Button variant="ghost" size="lg" onClick={() => save(0)}>
+          <Button variant="ghost" size="lg" disabled={saving} onClick={() => save(0)}>
             Remover meta
           </Button>
         ) : null}

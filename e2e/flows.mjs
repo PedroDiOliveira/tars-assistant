@@ -208,7 +208,7 @@ const money = (s) => {
   // ---------- 8. Meta por vigência ----------
   await page.goto(BASE + "/configuracoes", { waitUntil: "networkidle" });
   await ready("text=Configurações");
-  await page.getByRole("button", { name: /Treinos por semana/ }).click();
+  await page.getByRole("button", { name: /Treinos de musculação por semana/ }).click();
   await page.waitForSelector("#goal-value");
   await page.fill("#goal-value", "5");
   await page.getByRole("button", { name: "Salvar meta" }).click();
@@ -216,7 +216,7 @@ const money = (s) => {
   await page.goto(BASE + "/inicio", { waitUntil: "networkidle" });
   await ready();
   const homeTxt = norm(await page.locator("main").first().innerText());
-  check("Home reflete a nova meta (x de 5)", /Treino \d de 5/.test(homeTxt), homeTxt.slice(0, 0) || undefined);
+  check("Home reflete a nova meta (x de 5)", /Musculação \d de 5/.test(homeTxt), homeTxt.slice(0, 0) || undefined);
   await page.goto(BASE + "/treino", { waitUntil: "networkidle" });
   await ready();
   const treinoTxt = norm(await page.locator("main").first().innerText());

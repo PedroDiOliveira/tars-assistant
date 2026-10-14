@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isValidDateKey, weekStart } from "@/lib/dates";
 import type { Command } from "./commands";
 import { GOAL_PERIOD } from "./goals";
+import { MAX_DISTANCE_METERS, MAX_RUN_NOTES, MAX_RUN_SECONDS, MAX_WEEKLY_GOAL_METERS, formatDistance } from "./running";
 import { MAX_SESSION_SECONDS, MIN_TIMER_SECONDS } from "./studies";
 
 /**
@@ -60,7 +61,7 @@ const template = obj({
 
 const goal = obj({
   id: uuid,
-  kind: z.enum(["savings", "category_budget", "workout_sessions", "study_minutes", "reading_pages"]),
+  kind: z.enum(["savings", "category_budget", "workout_sessions", "study_minutes", "reading_pages", "running_meters"]),
   scopeId: uuid.nullable(),
   validFrom: dateKey,
   target: z.number().int().min(0, { error: "A meta não pode ser negativa." }).max(MAX_CENTS),
@@ -79,6 +80,13 @@ const goal = obj({
   }
   if (g.scopeId !== null && g.kind !== "category_budget" && g.kind !== "study_minutes") {
     ctx.addIssue({ code: "custom", path: ["scopeId"], message: "Esta meta não tem escopo." });
+  }
+  if (g.kind === "running_meters" && g.target > MAX_WEEKLY_GOAL_METERS) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["target"],
+      message: `A meta semanal de corrida pode ir até ${formatDistance(MAX_WEEKLY_GOAL_METERS)}.`,
+    });
   }
 });
 
@@ -151,6 +159,26 @@ const readingSession = obj({
   endPage: page,
   notes: text(200, "Observações").optional(),
 });
+
+const runningFields = obj({
+  occurredOn: dateKey,
+  // Ausente = "não informado". Presente: metros inteiros e positivos (nunca 0, nunca null, nunca fração).
+  distanceMeters: z
+    .number()
+    .int({ error: "A distância deve estar em metros inteiros." })
+    .min(1, { error: "A distância deve ser maior que zero." })
+    .max(MAX_DISTANCE_METERS, { error: `A distância máxima por corrida é ${formatDistance(MAX_DISTANCE_METERS)}.` })
+    .optional(),
+  durationSeconds: z
+    .number()
+    .int({ error: "A duração deve estar em segundos inteiros." })
+    .min(1, { error: "A duração deve ser maior que zero." })
+    .max(MAX_RUN_SECONDS, { error: "A duração máxima por corrida é de 24 horas." })
+    .optional(),
+  notes: text(MAX_RUN_NOTES, "Observação").optional(),
+});
+
+const runningSession = obj({ id: uuid, ...runningFields.shape });
 
 const subjectFields = obj({
   name: name(40, "Matéria"),
@@ -244,6 +272,9 @@ export const commandSchema: z.ZodType<Command> = z.discriminatedUnion("type", [
   obj({ type: z.literal("reading.addSession"), session: readingSession }),
   obj({ type: z.literal("reading.updateSession"), id: uuid, fields: readingFields }),
   obj({ type: z.literal("reading.deleteSession"), id: uuid }),
+  obj({ type: z.literal("running.addSession"), session: runningSession, nowMs: epochMs }),
+  obj({ type: z.literal("running.updateSession"), id: uuid, fields: runningFields, nowMs: epochMs }),
+  obj({ type: z.literal("running.deleteSession"), id: uuid }),
 ]);
 
 /**

@@ -1,17 +1,20 @@
 import { daysInWeek, weekPeriod, type DateKey, type MonthKey } from "@/lib/dates";
+import type { WeekDot } from "./activity";
 import { expensesByCategory, monthSummary } from "./finance";
 import { currentMonthTarget, currentWeekTarget, targetFor } from "./goals";
 import { limitTone, progressRatio, type ProgressTone } from "./progress";
 import { bookProgress, pagesByDay, pagesInPeriod, pickCurrentBook } from "./reading";
+import { runsInPeriod, runTotals, runWeekDots, totalDistanceMeters, type RunTotals } from "./running";
 import { weeklyStreak, type WeeklyStreak } from "./streaks";
 import { secondsByDay, secondsBySubject, secondsInPeriod } from "./studies";
-import { sessionsInPeriod as workoutSessionsInPeriod, weekDots, type WeekDot } from "./workouts";
+import { sessionsInPeriod as workoutSessionsInPeriod, weekDots } from "./workouts";
 import type {
   Book,
   Category,
   Exercise,
   Goal,
   ReadingSession,
+  RunningSession,
   StudySession,
   Subject,
   Transaction,
@@ -31,6 +34,7 @@ export interface DataSnapshot {
   studySessions: StudySession[];
   books: Book[];
   readingSessions: ReadingSession[];
+  runningSessions: RunningSession[];
 }
 
 /* ---------- Finanças ---------- */
@@ -224,6 +228,38 @@ export function readingWeekSummary(data: DataSnapshot, today: DateKey): ReadingW
       today,
       valueForWeek: (ws) => pagesInPeriod(data.readingSessions, weekPeriod(ws)),
       targetForWeek: (ws) => targetFor(data.goals, "reading_pages", null, ws),
+    }),
+  };
+}
+
+/* ---------- Corrida ---------- */
+
+export interface RunningWeekSummary extends RunTotals {
+  /** meta semanal de distância, em metros, ou null */
+  targetMeters: number | null;
+  /** quanto falta para a meta (0 sem meta ou com a meta batida) */
+  remainingMeters: number;
+  ratio: number;
+  dots: WeekDot[];
+  /** semanas seguidas batendo a meta de DISTÂNCIA da corrida (independente da sequência de musculação) */
+  streak: WeeklyStreak;
+}
+
+/** A única definição de "como foi a semana de corrida": a tela, a Home e o assistente leem esta. */
+export function runningWeekSummary(data: DataSnapshot, today: DateKey): RunningWeekSummary {
+  const weekRuns = runsInPeriod(data.runningSessions, weekPeriod(today));
+  const totals = runTotals(weekRuns);
+  const targetMeters = currentWeekTarget(data.goals, "running_meters", null, today);
+  return {
+    ...totals,
+    targetMeters,
+    remainingMeters: targetMeters ? Math.max(0, targetMeters - totals.distanceMeters) : 0,
+    ratio: progressRatio(totals.distanceMeters, targetMeters),
+    dots: runWeekDots(weekRuns, today),
+    streak: weeklyStreak({
+      today,
+      valueForWeek: (ws) => totalDistanceMeters(runsInPeriod(data.runningSessions, weekPeriod(ws))),
+      targetForWeek: (ws) => targetFor(data.goals, "running_meters", null, ws),
     }),
   };
 }

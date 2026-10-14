@@ -2,15 +2,20 @@ import type { AppData } from "@/domain/snapshot";
 import { todayKey } from "@/lib/dates";
 import type { Snapshot } from "./snapshot";
 
-/** Versão do formato do arquivo de backup. Sobe quando o formato muda, para um importador futuro saber ler. */
-export const EXPORT_VERSION = 1;
+/**
+ * Versão do formato do arquivo de backup. Sobe quando o formato muda, para um importador futuro saber ler.
+ *  1: lançamentos, metas, treinos, estudos, leituras e catálogos.
+ *  2: + `data.runningSessions` (corridas; distância em metros e duração em segundos, ausentes quando não informadas)
+ *     e a meta `running_meters` (metros) em `data.goals`. Um arquivo v1 é um v2 sem corridas.
+ */
+export const EXPORT_VERSION = 2;
 
 export interface ExportFile {
   app: "tars";
   version: typeof EXPORT_VERSION;
   exportedAt: string;
   profile: { displayName: string } | null;
-  /** Tudo o que o app guarda do usuário: lançamentos, metas, treinos, estudos, leituras e catálogos (inclusive os arquivados). */
+  /** Tudo o que o app guarda do usuário: lançamentos, metas, treinos, corridas, estudos, leituras e catálogos (inclusive os arquivados). */
   data: AppData;
 }
 

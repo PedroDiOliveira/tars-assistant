@@ -15,6 +15,8 @@ interface MetricRowProps {
   unit?: string;
   ratio: number;
   progressLabel: string;
+  /** contexto curto sob a barra, ex.: "8 km informados · 1 corrida sem distância" */
+  note?: string | null;
   className?: string;
 }
 
@@ -28,6 +30,7 @@ export function MetricRow({
   unit,
   ratio,
   progressLabel,
+  note,
   className,
 }: MetricRowProps) {
   return (
@@ -48,6 +51,7 @@ export function MetricRow({
         <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" aria-hidden />
       </div>
       <ProgressBar className="mt-2.5 h-1.5" ratio={ratio} label={progressLabel} />
+      {note ? <p className="mt-1.5 pl-12 text-xs text-muted-foreground">{note}</p> : null}
     </Link>
   );
 }

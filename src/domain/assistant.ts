@@ -17,8 +17,9 @@ import { expensesByCategory, monthSummary } from "./finance";
 import { formatBRL } from "./money";
 import type { TxProposal } from "./quick-entry";
 import { pagesInPeriod } from "./reading";
+import { formatDistance, runsInPeriod, runTotals, type RunTotals } from "./running";
 import { secondsInPeriod } from "./studies";
-import { readingWeekSummary, workoutSummary, type DataSnapshot } from "./summary";
+import { readingWeekSummary, runningWeekSummary, workoutSummary, type DataSnapshot } from "./summary";
 import { sessionsInPeriod } from "./workouts";
 
 export interface AssistantReply {
@@ -40,6 +41,18 @@ function weekLabel(today: DateKey): string {
 
 function wantsPastMonth(q: string): boolean {
   return /mes passado|ultimo mes|mes anterior/.test(q);
+}
+
+/**
+ * "3 corridas, 2 dias com corrida, 8 km informados (1 corrida sem distância)". Distância informada e distância
+ * desconhecida são coisas diferentes: sem nenhuma distância preenchida o total de km não é "0", é desconhecido.
+ */
+function describeRuns(totals: RunTotals): string {
+  if (totals.runs === 0) return "nenhuma corrida registrada";
+  const counts = `${totals.runs} ${pluralize(totals.runs, "corrida", "corridas")} em ${totals.activeDays} ${pluralize(totals.activeDays, "dia", "dias")}`;
+  if (!totals.hasDistance) return `${counts}, sem distância preenchida`;
+  const missing = totals.runsWithoutDistance;
+  return `${counts}, ${formatDistance(totals.distanceMeters)} informados${missing > 0 ? ` (${missing} ${pluralize(missing, "corrida sem distância", "corridas sem distância")})` : ""}`;
 }
 
 /**
@@ -85,10 +98,12 @@ export function answerQuestion(question: string, data: DataSnapshot, today: Date
     const spent = data.transactions
       .filter((t) => t.type === "expense" && t.occurredOn >= wk.start && t.occurredOn <= wk.end)
       .reduce((s, t) => s + t.amountCents, 0);
+    const running = runningWeekSummary(data, today);
     const lines = [
       workout.target
-        ? `Treino: ${workout.done} de ${workout.target} ${pluralize(workout.target, "treino", "treinos")}.`
-        : `Treino: ${workout.done} ${pluralize(workout.done, "treino", "treinos")} (sem meta definida).`,
+        ? `Musculação: ${workout.done} de ${workout.target} ${pluralize(workout.target, "treino", "treinos")}.`
+        : `Musculação: ${workout.done} ${pluralize(workout.done, "treino", "treinos")} (sem meta definida).`,
+      `Corrida: ${describeRuns(running)}.`,
       `Estudo: ${formatMinutes(studied / 60)} registrados.`,
       `Leitura: ${read} ${pluralize(read, "página", "páginas")}.`,
       `Gastos: ${formatBRL(spent)}.`,
@@ -96,7 +111,17 @@ export function answerQuestion(question: string, data: DataSnapshot, today: Date
     return { text: `Sua ${period}:\n${lines.join("\n")}`, period };
   }
 
-  if (/quantas vezes treinei/.test(q)) {
+  if (/quanto corri|quantos? (km|quilometros)|quantas (vezes|corridas) corri|minhas corridas/.test(q)) {
+    const weekly = /semana/.test(q);
+    const month = wantsPastMonth(q) ? addMonths(monthOf(today), -1) : monthOf(today);
+    const period = weekly ? weekLabel(today) : formatMonthLabel(month);
+    const range = weekly ? weekPeriod(today) : monthPeriod(month);
+    const totals = runTotals(runsInPeriod(data.runningSessions, range));
+    if (totals.runs === 0) return { text: `Não há corridas registradas (${period}).`, period };
+    return { text: `Corrida (${period}): ${describeRuns(totals)}.`, period };
+  }
+
+  if (/quantas vezes (treinei|fiz musculacao)/.test(q)) {
     const end = today;
     const start = addDays(weekStart(today), -21); // 4 semanas, contando a atual
     const total = sessionsInPeriod(data.sessions, { start, end }).length;
@@ -105,9 +130,9 @@ export function answerQuestion(question: string, data: DataSnapshot, today: Date
       return sessionsInPeriod(data.sessions, weekPeriod(ws)).length;
     });
     const period = `últimas 4 semanas (${formatDayShort(start)} a ${formatDayShort(end)})`;
-    if (total === 0) return { text: `Não há treinos registrados nas ${period}.`, period };
+    if (total === 0) return { text: `Não há treinos de musculação registrados nas ${period}.`, period };
     return {
-      text: `Você treinou ${total} ${pluralize(total, "vez", "vezes")} nas ${period}. Da mais recente para a mais antiga: ${weeks.join(", ")}.`,
+      text: `Você fez musculação ${total} ${pluralize(total, "vez", "vezes")} nas ${period}. Da mais recente para a mais antiga: ${weeks.join(", ")}.`,
       period,
     };
   }

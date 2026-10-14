@@ -55,6 +55,7 @@ jobs:
           cat server.log
           exit 1
       - run: npm run test:e2e
+      - run: npm run test:e2e:running
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

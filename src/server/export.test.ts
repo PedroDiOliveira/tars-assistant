@@ -17,6 +17,18 @@ describe("buildExport", () => {
     expect(JSON.parse(JSON.stringify(file, null, 2)).data).toEqual(JSON.parse(JSON.stringify(snapshot.data)));
   });
 
+  it("inclui as corridas (distância em metros; ausente quando não informada) e a versão do formato é 2", () => {
+    expect(EXPORT_VERSION).toBe(2);
+    const file = buildExport(snapshot, new Date());
+    expect(file.data.runningSessions.length).toBeGreaterThanOrEqual(3);
+    const parsed = JSON.parse(JSON.stringify(file)) as typeof file;
+    expect(parsed.version).toBe(2);
+    expect(parsed.data.runningSessions).toEqual(snapshot.data.runningSessions);
+    const withoutDistance = parsed.data.runningSessions.find((r) => r.id === "run3");
+    expect(withoutDistance).toEqual({ id: "run3", occurredOn: "2026-10-07", notes: "Esqueci o relógio" });
+    expect(withoutDistance).not.toHaveProperty("distanceMeters"); // ausente, nunca 0 nem null
+  });
+
   it("inclui os itens arquivados (backup completo)", () => {
     const withArchived = { ...snapshot, data: sampleData() };
     expect(buildExport(withArchived, new Date()).data.categories.some((c) => c.archived)).toBe(true);

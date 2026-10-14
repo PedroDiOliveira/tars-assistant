@@ -5,6 +5,7 @@ import type {
   Exercise,
   Goal,
   ReadingSession,
+  RunningSession,
   StudySession,
   Subject,
   Transaction,
@@ -65,7 +66,11 @@ export type Command =
   | { type: "book.setStatus"; id: string; status: BookStatus }
   | { type: "reading.addSession"; session: ReadingSession }
   | { type: "reading.updateSession"; id: string; fields: ReadingSessionFields }
-  | { type: "reading.deleteSession"; id: string };
+  | { type: "reading.deleteSession"; id: string }
+  /* corrida: `nowMs` só serve ao reducer para recusar data futura; o banco decide pelo próprio relógio */
+  | { type: "running.addSession"; session: RunningSession; nowMs: number }
+  | { type: "running.updateSession"; id: string; fields: RunningSessionFields; nowMs: number }
+  | { type: "running.deleteSession"; id: string };
 
 /**
  * Campos editáveis de um registro. Atualizar SUBSTITUI todos eles (não é um patch parcial): assim "limpar a
@@ -81,6 +86,7 @@ export type ExerciseFields = Omit<Exercise, "id" | "archived">;
 export type PlanInput = Omit<WorkoutPlan, "archived">;
 export type BookFields = Omit<Book, "id" | "status">;
 export type ReadingSessionFields = Omit<ReadingSession, "id" | "bookId">;
+export type RunningSessionFields = Omit<RunningSession, "id">;
 
 export type CommandType = Command["type"];
 

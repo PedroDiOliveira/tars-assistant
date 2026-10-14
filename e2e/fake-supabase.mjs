@@ -60,7 +60,7 @@ export async function startFakeSupabase({ port = 54399 } = {}) {
   const refreshTokens = new Map(); // refresh_token -> userId
   const recoveries = new Map(); // token_hash -> email
   const mails = []; // e-mails "enviados"
-  const state = { restDown: false, latencyMs: 0 };
+  const state = { restDown: false, latencyMs: 0, dropApplyResponses: 0 };
 
   const userJson = (user, email) => ({
     id: user.id,
@@ -231,6 +231,11 @@ export async function startFakeSupabase({ port = 54399 } = {}) {
           await pg.exec("reset role");
           await pg.query("select set_config('request.jwt.claim.sub', '', false)");
         }
+        // Resposta perdida: o banco JÁ gravou, mas a conexão morre antes de a resposta chegar ao app.
+        if (fn === "apply_command" && state.dropApplyResponses > 0) {
+          state.dropApplyResponses -= 1;
+          return req.socket.destroy();
+        }
         return send(res, 200, rows[0].r);
       } catch (error) {
         return send(res, 400, { code: error.code ?? "XX000", message: error.message, details: null, hint: null });
@@ -270,6 +275,10 @@ export async function startFakeSupabase({ port = 54399 } = {}) {
     },
     setLatency(ms) {
       state.latencyMs = ms;
+    },
+    /** Os próximos `n` comandos são GRAVADOS, mas a resposta nunca chega (a rede cai no caminho de volta). */
+    dropApplyResponses(n) {
+      state.dropApplyResponses = n;
     },
     async close() {
       await new Promise((resolve) => server.close(resolve));
