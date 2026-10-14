@@ -4,7 +4,7 @@
  *
  *   Auth      POST /auth/v1/token (password|refresh_token) · GET/PUT /auth/v1/user · POST /auth/v1/logout
  *             POST /auth/v1/recover · POST /auth/v1/verify
- *   PostgREST POST /rest/v1/rpc/<função>   (apply_command, get_snapshot, ping)
+ *   PostgREST POST /rest/v1/rpc/<função>   (apply_command, get_snapshot, ping, set_display_name)
  *
  * O que NÃO é falso: o banco (mesmo SQL, RLS e funções de produção), o JWT HS256 (assinado e verificado) e o app.
  * Serve para provar a integração (cookies, proxy, Server Actions, atualização otimista); não substitui um teste
@@ -218,7 +218,7 @@ export async function startFakeSupabase({ port = 54399 } = {}) {
         }
         try {
           // Funções expostas pelo app (lista fechada). Argumentos nomeados, como o PostgREST faz.
-          const EXPOSED = ["apply_command", "get_snapshot", "ping", "ai_reserve", "ai_record"];
+          const EXPOSED = ["apply_command", "get_snapshot", "ping", "ai_reserve", "ai_record", "set_display_name"];
           if (!EXPOSED.includes(fn)) {
             return send(res, 404, { code: "PGRST202", message: `função ${fn} não existe`, details: null, hint: null });
           }

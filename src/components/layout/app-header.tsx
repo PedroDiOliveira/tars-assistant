@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
+import { displayInitial } from "@/domain/profile";
 import { useAccount } from "@/data";
 
 /**
@@ -12,7 +13,7 @@ import { useAccount } from "@/data";
  */
 export function AppHeader() {
   const { isLive, displayName, aiEnabled } = useAccount();
-  const initial = displayName.trim().charAt(0).toUpperCase() || "?";
+  const initial = displayInitial(displayName);
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between bg-background/80 px-4 backdrop-blur-xl">
       <div className="flex items-center gap-2">

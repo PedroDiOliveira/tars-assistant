@@ -38,6 +38,7 @@ export const useDraft = layer.useDraft;
 export const useTimer = layer.useTimer;
 export const useAccount = layer.useAccount;
 export const signOut = layer.signOut;
+export const updateDisplayName = layer.updateDisplayName;
 export const assistant = layer.assistant;
 
 export function useActions() {

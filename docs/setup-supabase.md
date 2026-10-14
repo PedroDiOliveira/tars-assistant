@@ -59,6 +59,12 @@ O que acontece se a ordem for trocada ou se for preciso voltar atrás:
 - A migração **não é reversível por um `down`**: remover um valor de enum não é suportado pelo Postgres. As corridas ficam na tabela própria e o resto do app não depende delas.
 - `ALTER TYPE … ADD VALUE` roda dentro da transação da migração; o valor novo só é *usado* depois do commit (as funções o comparam em tempo de execução), por isso nada na migração o referencia como literal.
 
+Outro exemplo, a versão com o **nome editável** (`supabase/migrations/20261014000014_profile_name.sql`), que se aplica junto com a anterior no mesmo `npm run db:push`:
+
+- A migração só **acrescenta**: a função `set_display_name(text)`, um gatilho que valida o nome e a restrição do `UPDATE` na tabela `profiles` à coluna `display_name` (antes o cliente podia alterar qualquer coluna da própria linha, o que o app nunca precisou). Não mexe em dados: nomes que já existem continuam como estão.
+- **App novo antes da migração:** o restante do app funciona, mas salvar o nome falha com "Não foi possível salvar. Tente de novo.", porque a função ainda não existe. Aplicar a migração resolve, sem perda de dados.
+- **App antigo com a migração aplicada:** funciona normalmente; o app antigo nunca alterou o perfil.
+
 ## 4. Criar o seu usuário e fechar o cadastro
 
 O app é de um dono só: **não existe tela de cadastro**.

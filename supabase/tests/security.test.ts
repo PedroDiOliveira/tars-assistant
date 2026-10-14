@@ -283,7 +283,7 @@ describe("permissões de execução (trava contra função nova esquecida)", () 
     const rest = allowed.filter((n) => !n.startsWith("private.cmd_")).sort();
     expect(rest).toEqual([
       "private.app_now", "private.epoch_ms", "private.outcome", "public.ai_record", "public.ai_reserve",
-      "public.app_tz", "public.apply_command", "public.get_snapshot", "public.ping",
+      "public.app_tz", "public.apply_command", "public.get_snapshot", "public.ping", "public.set_display_name",
     ]);
     // todo comando existente é executável (senão o despachante falharia só em produção)
     const allCommands = fns.filter((f) => f.name.startsWith("cmd_")).length;

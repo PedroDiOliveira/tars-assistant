@@ -92,6 +92,21 @@ Autenticação e banco reais, edição de fichas/categorias/exercícios, IA real
 - Se a sequência semanal e o "Atenção desta semana" fazem sentido ou viram ruído.
 - Sensação de uso no iPhone real: teclado, áreas seguras, tela de início.
 
+## Nome de exibição
+
+O nome da saudação, do avatar e de Configurações nascia da parte do e-mail antes do "@" (algo como `pedro.h.soterio`) e não dava para mudar. Agora o **lápis no cartão de perfil de Configurações** abre um editor. A regra mora num lugar só, `domain/profile.ts`, e vale igual no formulário, no servidor e no modo demo.
+
+- **O que muda e o que não muda.** Só o nome de exibição. O e-mail de login fica como está: trocar e-mail é um fluxo de autenticação com confirmação, e não faz parte desta entrega.
+- **Regras.** De 1 a 60 caracteres (contados em pontos de código, então um emoji conta 1), com pelo menos uma letra ou número. O texto é normalizado, nunca "limpo" em silêncio: Unicode NFC (o "ã" digitado e o "a" + til colado viram o mesmo), qualquer espaço (inclusive o não separável, comum ao colar) vira um espaço comum e as sobras nas pontas e as repetições somem. Acentos, apóstrofo, hífen, ponto, emoji e outras escritas passam.
+- **O que é recusado, com o motivo na tela:** quebras de linha e caracteres de controle; caracteres invisíveis e de direção (largura zero, inversão de direção), que servem para fazer um nome parecer outro; pilhas de mais de 4 acentos seguidos; uso privado. Contrapartida aceita: os conectores de largura zero (ZWJ/ZWNJ) também caem, então emojis compostos (família, bandeiras de profissões) e a grafia persa com meio-espaço não passam. Para um app pessoal em português, isso é preferível a abrir a porta para texto invisível.
+- **Não existe nome vazio nem "voltar ao automático".** O campo exige um nome; o automático (parte do e-mail) só vale para quem ainda não definiu nenhum.
+- **Salvar não é otimista.** A tela só mostra o nome novo e o aviso "Nome atualizado" depois que o servidor gravou, e usa o nome que o servidor devolveu (já normalizado). Se o servidor recusar, o motivo aparece no campo e o nome antigo continua.
+- **Inicial do avatar.** É o primeiro grafema, não `charAt(0)`: com emoji ou letra acentuada decomposta, `charAt(0)` mostraria metade de um caractere.
+- **Nomes longos.** Os 60 caracteres sem espaço quebram a linha em vez de estourar a Home e o cartão de perfil.
+- **Privacidade.** O nome não vai para o assistente de IA nem para os logs; só aparece na tela, no backup (`/api/export`) e no banco.
+- **Frequência.** Não há limite: trocar o nome é idempotente, só quem está logado altera o próprio e a superfície é a mesma das demais escritas. Um limite só faria sentido com mais de um dono.
+- **Demo.** Mesma regra, guardada no `localStorage`. "Resetar dados de demonstração" volta ao nome de demonstração.
+
 ## Corrida (área Exercícios)
 
 A área da navegação inferior que era "Treino" passou a se chamar **Exercícios** e tem duas seções, como Estudos tem Estudo e Leitura: **Musculação** (`/treino`, a funcionalidade que já existia) e **Corrida** (`/treino/corrida`, nova). As abas são rotas de verdade; o histórico de corridas é `/treino/corrida/historico`. A barra inferior continua com quatro destinos, e as rotas e arquivos de musculação (`/treino/sessao`, `/treino/historico`, tabelas `workout_*`) não foram renomeados: o ganho de uma refatoração só por nomenclatura não compensa o risco.

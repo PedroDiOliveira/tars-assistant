@@ -1,6 +1,7 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Command, Outcome } from "@/domain/commands";
+import { parseDisplayName } from "@/domain/profile";
 import { applyCommand } from "@/domain/reducers";
 import { EMPTY_APP_DATA } from "@/domain/snapshot";
 import type { DataSnapshot } from "@/domain/summary";
@@ -9,6 +10,7 @@ import { addDraftSet, buildDraft, removeDraftSet, setDraftNotes, updateDraftSet 
 import { uid } from "@/lib/id";
 import { runCommand } from "@/server/actions/commands";
 import { signOut as signOutAction } from "@/server/actions/auth";
+import { updateDisplayName as updateDisplayNameAction } from "@/server/actions/profile";
 import { createDataActions, type ActionHost } from "../actions";
 import { fail, ok, type Actions, type LocalActions, type Result } from "../contract";
 import type { Account, DataLayer, StoreStatus } from "../layer";
@@ -166,6 +168,33 @@ async function signOut(): Promise<Result> {
   return ok();
 }
 
+/**
+ * Troca o nome de exibição. NÃO é otimista: a tela só mostra o nome novo (e o aviso de sucesso) depois que o servidor
+ * gravou, e o que entra no cache é o que o servidor devolveu (já normalizado), nunca o que foi digitado.
+ */
+async function updateDisplayName(name: string): Promise<Result<{ displayName: string }>> {
+  // Feedback sem ida à rede; o servidor valida de novo (é ele quem vale).
+  const parsed = parseDisplayName(name);
+  if (!parsed.ok) return fail(parsed.error, "validation");
+
+  let result: Result<{ displayName: string }>;
+  try {
+    result = await updateDisplayNameAction(parsed.name);
+  } catch {
+    return fail("Sem conexão com o servidor. O nome não foi alterado.", "offline");
+  }
+  if (!result.ok) {
+    if (result.code === "unauthorized") goToLogin();
+    return result;
+  }
+
+  const confirmed = result.value.displayName;
+  // Uma leitura já em andamento devolveria o nome ANTIGO por cima do novo.
+  await queryClient.cancelQueries({ queryKey: SNAPSHOT_KEY });
+  queryClient.setQueryData<SnapshotPayload>(SNAPSHOT_KEY, (old) => (old ? { ...old, profile: { displayName: confirmed } } : old));
+  return result;
+}
+
 export const remoteLayer: DataLayer = {
   useStoreStatus,
   // No modo real a abertura não espera os dados: cada tela mostra o próprio esqueleto (StoreGate). Assim o layout
@@ -179,4 +208,5 @@ export const remoteLayer: DataLayer = {
   actions,
   assistant: remoteAssistant,
   signOut,
+  updateDisplayName,
 };

@@ -6,9 +6,10 @@ import { withStoreGate } from "@/components/layout/store-gate";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import { ChevronRight, Download, LogOut, RotateCcw, Trash2 } from "lucide-react";
+import { ChevronRight, Download, LogOut, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GoalSheet, type GoalTarget } from "@/components/goals/goal-sheet";
+import { ProfileNameSheet } from "@/components/settings/profile-name-sheet";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Segmented } from "@/components/shared/segmented";
 import { SectionTitle } from "@/components/shared/section-title";
@@ -16,6 +17,7 @@ import { Surface } from "@/components/shared/surface";
 import { SubHeader } from "@/components/layout/sub-header";
 import { activeOnly } from "@/domain/catalog";
 import { goalFor } from "@/domain/goals";
+import { displayInitial } from "@/domain/profile";
 import { formatDistance } from "@/domain/running";
 import { formatBRL, formatBRLCompact } from "@/domain/money";
 import type { Goal, GoalKind } from "@/domain/types";
@@ -44,6 +46,7 @@ function SettingsScreenContent() {
   const [resetOpen, setResetOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [nameOpen, setNameOpen] = useState(false);
 
   async function leave() {
     if (!account.isLive) {
@@ -97,15 +100,18 @@ function SettingsScreenContent() {
 
       <div className="space-y-6 px-4 pt-2">
         <Surface className="flex items-center gap-4 p-4">
-          <span className="grid size-14 place-items-center rounded-full bg-accent text-xl font-bold text-accent-foreground">
-            {name.charAt(0).toUpperCase()}
+          <span className="grid size-14 shrink-0 place-items-center rounded-full bg-accent text-xl font-bold text-accent-foreground">
+            {displayInitial(name)}
           </span>
-          <div>
-            <p className="text-lg font-semibold">{name}</p>
-            <p className="text-sm text-muted-foreground">
+          <div className="min-w-0 flex-1">
+            <p className="text-lg font-semibold break-words">{name}</p>
+            <p className="text-sm break-words text-muted-foreground">
               {account.isLive ? `${account.email ?? "Conta"} · America/Sao_Paulo · BRL` : "Conta de demonstração · America/Sao_Paulo · BRL"}
             </p>
           </div>
+          <Button variant="ghost" size="icon" className="shrink-0" aria-label="Editar nome" onClick={() => setNameOpen(true)}>
+            <Pencil aria-hidden />
+          </Button>
         </Surface>
 
         <section className="space-y-3">
@@ -244,6 +250,7 @@ function SettingsScreenContent() {
       </div>
 
       <GoalSheet open={goalOpen} onOpenChange={setGoalOpen} target={goalTarget} />
+      <ProfileNameSheet open={nameOpen} onOpenChange={setNameOpen} currentName={account.displayName} />
       <ConfirmDialog
         open={signOutOpen}
         onOpenChange={setSignOutOpen}

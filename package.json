@@ -13,6 +13,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test:e2e": "node e2e/flows.mjs",
     "test:e2e:running": "node e2e/running.mjs",
+    "test:e2e:profile": "node e2e/profile.mjs",
     "test:e2e:assistant": "node e2e/assistant.mjs",
     "test:splash": "node e2e/splash.mjs",
     "db:test": "vitest run supabase/tests",

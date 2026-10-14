@@ -5,7 +5,7 @@ Registro das decisões que sustentam a passagem do protótipo (dados mock no nav
 README e o contexto do produto em [especificacao-app-pessoal.md](especificacao-app-pessoal.md) e
 [decisoes.md](decisoes.md).
 
-Status: **aceitas em 2026-10-07**. Alterar uma delas exige atualizar este arquivo. As decisões 11 a 24 vieram durante a
+Status: **aceitas em 2026-10-07**. Alterar uma delas exige atualizar este arquivo. As decisões 11 a 26 vieram durante a
 implementação, cada uma com o problema real que a motivou.
 
 ## Princípios
@@ -48,6 +48,7 @@ implementação, cada uma com o problema real que a motivou.
 | 23 | **O id de um registro novo nasce com o formulário e é reenviado em cada tentativa**, e uma falha desfaz a atualização otimista na hora | Bloquear toque duplo não cobre "o servidor salvou e a resposta se perdeu". E a releitura que reconcilia o cache falha justamente quando o servidor está fora do ar: sem o desfazer, o total otimista ficaria na tela |
 | 24 | **Migração antes do app.** As migrações são aditivas; o app novo recusa um banco sem a coleção nova (com a mensagem de aplicar a migração) em vez de abrir pela metade | Ver o passo a passo em [setup-supabase.md](setup-supabase.md#atualizar-um-projeto-que-já-está-em-uso-ordem-de-implantação) |
 | 25 | **Cards do assistente são REFERÊNCIAS, não dados.** O servidor responde com o texto e, por ferramenta que achou registros, só `{kind, mês/período}` (~80 bytes, fora do payload que vai ao modelo); o app monta o card com o próprio snapshot e as mesmas funções de domínio das telas (`domain/assistant-cards.ts`), e o demo usa o mesmo código | Zero token e zero chamada extra à IA, nenhuma tabela ou consulta nova, nenhum nome de categoria, matéria ou livro trafega a mais, e o modelo nunca produz interface (só `text`). O cliente valida as referências com Zod e descarta o que for inválido, mantendo o texto |
+| 26 | **O nome de exibição é editado pela RPC `set_display_name` (security invoker) e validado em TRÊS camadas**: `parseDisplayName` em `domain/profile.ts` (normaliza e dá a mensagem; é a regra do formulário, da Server Action e do demo), a Server Action (autentica por `getClaims()` e trata o argumento como entrada não confiável) e um gatilho no banco (`private.check_profile_name`) que recusa o que não vier normalizado, por qualquer caminho. O cliente só tem `UPDATE (display_name)` em `profiles`; o dono da linha vem do `auth.uid()`, nunca do argumento | A API do Supabase continua acessível a quem tem um JWT válido, então uma regra só no TypeScript pode ser contornada com um PATCH direto. O gatilho só dispara em UPDATE e só quando o nome muda, para nunca barrar o cadastro (que deriva o nome do e-mail e pode gerar um nome vazio ou terminado em espaço). O que depende de propriedades Unicode (letra ou número, pilha de acentos) fica só no TypeScript, porque o Postgres não tem `\p{...}`; um teste prova que o banco **nunca recusa o que o app aceita** |
 
 ## Onde cada coisa mora
 

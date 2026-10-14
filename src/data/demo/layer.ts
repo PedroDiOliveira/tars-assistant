@@ -3,10 +3,11 @@ import { useShallow } from "zustand/react/shallow";
 import type { DataSnapshot } from "@/domain/summary";
 import type { StudyTimer, TxTemplate, WorkoutDraft } from "@/domain/types";
 import { answerQuestion, type AssistantReply } from "@/domain/assistant";
+import { parseDisplayName } from "@/domain/profile";
 import { parseQuickEntry } from "@/domain/quick-entry";
 import { todayKey } from "@/lib/dates";
 import { uid } from "@/lib/id";
-import { ok, type AssistantApi } from "../contract";
+import { fail, ok, type AssistantApi, type Result } from "../contract";
 import type { Account, DataLayer, StoreStatus } from "../layer";
 import { actions, ensureStoreReady, isStoreReady, useTarsStore } from "./store";
 
@@ -78,6 +79,14 @@ const assistant: AssistantApi = {
   },
 };
 
+/** No demo o nome mora no store local (e no localStorage), com a mesma regra do modo real. */
+async function updateDisplayName(name: string): Promise<Result<{ displayName: string }>> {
+  const parsed = parseDisplayName(name);
+  if (!parsed.ok) return fail(parsed.error, "validation");
+  useTarsStore.setState({ displayName: parsed.name });
+  return ok({ displayName: parsed.name });
+}
+
 export const demoLayer: DataLayer = {
   useStoreStatus,
   // Dados locais carregam em milissegundos; a abertura espera por eles (e nunca prende a pessoa em caso de erro).
@@ -91,4 +100,5 @@ export const demoLayer: DataLayer = {
   assistant,
   // No demo "sair" só volta para a tela de entrada: os dados fictícios ficam neste navegador.
   signOut: async () => ok(),
+  updateDisplayName,
 };

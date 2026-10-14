@@ -37,4 +37,10 @@ export interface DataLayer {
   assistant: AssistantApi;
   /** Encerra a sessão e apaga os dados locais do usuário. Em falha, a sessão continua e o erro é devolvido. */
   signOut(): Promise<Result>;
+  /**
+   * Altera o nome de exibição. Valida com `parseDisplayName` e, no modo real, só devolve `ok` depois que o servidor
+   * gravou. O valor devolvido é o nome COMO FICOU gravado (normalizado), que pode diferir do digitado.
+   * Falha com `code: "validation"` e a mensagem em português quando o nome é inválido.
+   */
+  updateDisplayName(name: string): Promise<Result<{ displayName: string }>>;
 }

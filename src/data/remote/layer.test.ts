@@ -7,6 +7,10 @@ import type { SnapshotPayload } from "./payload";
 // As Server Actions rodam no servidor; aqui o "servidor" é um dublê controlado pelo teste.
 vi.mock("@/server/actions/commands", () => ({ runCommand: vi.fn() }));
 vi.mock("@/server/actions/auth", () => ({ signOut: vi.fn() }));
+// A Server Action de nome passa por uma função comum: assim o cenário "servidor fora do ar" rejeita uma função de
+// verdade (um `vi.fn` que rejeita faz o Vitest 5 atribuir a rejeição ao teste, mesmo tratada pelo código).
+const profileServer = vi.hoisted(() => ({ impl: (async () => undefined) as (name: string) => Promise<unknown> }));
+vi.mock("@/server/actions/profile", () => ({ updateDisplayName: (name: string) => profileServer.impl(name) }));
 
 const { runCommand } = await import("@/server/actions/commands");
 const { remoteLayer } = await import("./layer");
@@ -126,5 +130,84 @@ describe("camada remota: escrita otimista confirmada pelo servidor", () => {
     server.mockResolvedValueOnce(fail("Sem conexão com o servidor. Nada foi salvo.", "offline"));
     expect(await actions.deleteRunningSession("run-1")).toMatchObject({ ok: false });
     expect(runs()).toEqual([{ id: "run-1", occurredOn: today(), distanceMeters: 5000 }]);
+  });
+});
+
+describe("camada remota: nome de exibição", () => {
+  const rename = vi.fn<(name: string) => Promise<Result<{ displayName: string }>>>();
+  const shownName = () => cached().profile?.displayName;
+
+  beforeEach(() => {
+    rename.mockReset();
+    profileServer.impl = rename;
+  });
+
+  it("manda ao servidor o nome já normalizado e guarda o que o SERVIDOR confirmou, não o digitado", async () => {
+    rename.mockResolvedValue(ok({ displayName: "Pedro H. (confirmado)" }));
+
+    const result = await remoteLayer.updateDisplayName("  Pedro   H. ");
+    expect(rename).toHaveBeenCalledExactlyOnceWith("Pedro H.");
+    expect(result).toEqual(ok({ displayName: "Pedro H. (confirmado)" }));
+    expect(shownName()).toBe("Pedro H. (confirmado)");
+  });
+
+  it("não é otimista: o nome antigo continua na tela enquanto o servidor não responde", async () => {
+    const pending = deferred<Result<{ displayName: string }>>();
+    rename.mockReturnValue(pending.promise);
+
+    const saving = remoteLayer.updateDisplayName("Novo");
+    await Promise.resolve();
+    expect(shownName()).toBe("Pedro");
+
+    pending.resolve(ok({ displayName: "Novo" }));
+    await saving;
+    expect(shownName()).toBe("Novo");
+  });
+
+  it("nome inválido é recusado aqui, sem ida ao servidor, e o nome da tela não muda", async () => {
+    const result = await remoteLayer.updateDisplayName("Pe\u200bdro");
+    expect(result).toMatchObject({ ok: false, code: "validation" });
+    expect(await remoteLayer.updateDisplayName("   ")).toMatchObject({ ok: false, code: "validation", error: "Informe um nome." });
+    expect(rename).not.toHaveBeenCalled();
+    expect(shownName()).toBe("Pedro");
+  });
+
+  it("o servidor recusou: devolve a mensagem e não muda o nome", async () => {
+    rename.mockResolvedValue(fail("O nome tem caracteres inválidos.", "validation"));
+    expect(await remoteLayer.updateDisplayName("Ana")).toEqual({ ok: false, code: "validation", error: "O nome tem caracteres inválidos." });
+    expect(shownName()).toBe("Pedro");
+  });
+
+  it("servidor fora do ar (a chamada lança): mensagem de offline e o nome não muda", async () => {
+    profileServer.impl = async () => {
+      throw new Error("fetch failed");
+    };
+    expect(await remoteLayer.updateDisplayName("Ana")).toEqual({
+      ok: false,
+      code: "offline",
+      error: "Sem conexão com o servidor. O nome não foi alterado.",
+    });
+    expect(shownName()).toBe("Pedro");
+  });
+
+  it("sessão expirada: repassa 'unauthorized' (a página volta ao login) e não muda o nome", async () => {
+    rename.mockResolvedValue(fail("Sua sessão expirou. Entre de novo.", "unauthorized"));
+    expect(await remoteLayer.updateDisplayName("Ana")).toMatchObject({ ok: false, code: "unauthorized" });
+    expect(shownName()).toBe("Pedro");
+  });
+
+  it("não derruba um comando de dados que ainda está a caminho", async () => {
+    const slow = deferred<Result<Outcome>>();
+    server.mockReturnValueOnce(slow.promise);
+    rename.mockResolvedValue(ok({ displayName: "Ana" }));
+
+    const run = actions.addRunningSession({ id: "r1", occurredOn: today() });
+    await vi.waitFor(() => expect(runs().map((r) => r.id)).toContain("r1"));
+    await remoteLayer.updateDisplayName("Ana");
+    expect(runs().map((r) => r.id)).toContain("r1"); // o nome novo não apagou o efeito otimista
+    expect(shownName()).toBe("Ana");
+
+    slow.resolve(ok<Outcome>("saved"));
+    await run;
   });
 });

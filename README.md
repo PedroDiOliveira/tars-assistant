@@ -196,7 +196,7 @@ Supabase (Postgres, Auth, RLS) behind Next.js route handlers and Server Actions,
 | Layer | What it covers |
 | --- | --- |
 | **698 unit and database tests** (Vitest) | Money arithmetic, timezone boundaries, goal validity, timer logic, command reducers and schemas, the AI tools and orchestration (with a scripted model), the OpenAI-compatible adapter (Groq / xAI) against a local fake API, the service worker policy (running the real `sw.js` in a sandbox), security headers — plus **a real Postgres (PGlite) running the actual migrations**: row-level security with two users, constraints, idempotency, midnight in the app's timezone, AI usage limits, and the reducer-vs-SQL parity suite |
-| **109 demo-mode end-to-end flows** ([`e2e/flows.mjs`](e2e/flows.mjs) and [`e2e/running.mjs`](e2e/running.mjs), Playwright) | Logging and deleting an expense and watching totals recompute, a full workout including a reload mid-session, the timer surviving a refresh, reading 30 → 50 counting as 20 pages, and double-tap protection on every confirm |
+| **109 demo-mode end-to-end flows** ([`e2e/flows.mjs`](e2e/flows.mjs), [`e2e/running.mjs`](e2e/running.mjs) and [`e2e/profile.mjs`](e2e/profile.mjs), Playwright) | Logging and deleting an expense and watching totals recompute, a full workout including a reload mid-session, the timer surviving a refresh, reading 30 → 50 counting as 20 pages, and double-tap protection on every confirm |
 | **173 live-mode end-to-end checks** ([`e2e/live.mjs`](e2e/live.mjs)) | The real production build against a **fake Supabase** (Auth + PostgREST over the real migrations) and a **fake AI API**: login and password reset (including an email scanner opening the link first), R$ 3.500 − R$ 42 = R$ 3.458 persisting across reloads, the server going down mid-save, a timer visible from a second device with a skewed clock, creating plans/categories/books from an empty account, the assistant end to end, usage limits stopping the provider call, a deploy with AI off, security headers, export, health, cron auth, and the offline fallback |
 | **Build & static checks** | `tsc --noEmit`, ESLint (also on the E2E scripts), `npm audit` for production dependencies, and a build that **fails** when the live-mode configuration is incomplete |
 
@@ -206,6 +206,7 @@ Two things I want to be upfront about. The fakes prove the integration without k
 npm test                # unit + database tests (no Docker needed)
 npm run test:e2e        # demo-mode flows (needs `npm run dev` running)
 npm run test:e2e:running # running flows in demo mode (same server)
+npm run test:e2e:profile # display-name editing in demo mode (same server)
 npm run test:e2e:live   # live-mode flows (builds and starts everything itself)
 npm run test:splash     # launch, installed resume, accessibility and recovery flows
 npm run lint            # ESLint

@@ -965,6 +965,61 @@ try {
   check("Configurações não oferecem 'Resetar dados de demonstração'", !settingsText.includes("Resetar dados de demonstração"));
   check("Exportar dados está habilitado no modo real", (await pageA.getByRole("link", { name: /Exportar dados/ }).count()) === 1);
 
+  /* ----- nome de exibição ----- */
+  {
+    const openEditor = async () => {
+      await pageA.getByRole("button", { name: "Editar nome" }).click();
+      await pageA.getByRole("dialog").getByLabel("Nome", { exact: true }).waitFor();
+      return pageA.getByRole("dialog").getByLabel("Nome", { exact: true });
+    };
+    const saveButton = () => pageA.getByRole("dialog").getByRole("button", { name: /Salvar nome|Salvando/ });
+    // O avatar com a inicial mora no cabeçalho das telas de abas (Início); Configurações é uma sub-rota com outro cabeçalho.
+    const header = () => pageA.locator("a[aria-label='Configurações e perfil']");
+
+    check("Antes de editar, o nome vem da parte local do e-mail", settingsText.includes("pedro"));
+
+    const input = await openEditor();
+    check("O editor abre com o nome atual preenchido", (await input.inputValue()) === "pedro");
+    check("Sem mudança, o botão de salvar fica desabilitado", await saveButton().isDisabled());
+
+    // inválidos: o formulário avisa antes de ir à rede e bloqueia o botão
+    await input.fill("Pe" + String.fromCodePoint(0x200b) + "dro");
+    check("Caractere invisível: o aviso aparece no campo e o botão trava", (await pageA.getByRole("alert").filter({ hasText: "invisíveis" }).count()) === 1 && (await saveButton().isDisabled()));
+    await input.fill("   ");
+    check("Só espaços: pede um nome", (await pageA.getByRole("alert").filter({ hasText: "Informe um nome." }).count()) === 1 && (await saveButton().isDisabled()));
+    await input.fill("...");
+    check("Sem letra nem número: recusado", (await pageA.getByRole("alert").filter({ hasText: "letra ou um número" }).count()) === 1);
+
+    // válido, com espaços sobrando e acento: o servidor devolve o nome normalizado
+    await input.fill("  João   Pedro  ");
+    await saveButton().click();
+    await toast(pageA, "Nome atualizado").waitFor();
+    // O sheet sai do DOM só depois da animação de fechamento.
+    await pageA.waitForSelector('[data-slot="drawer-content"]', { state: "detached", timeout: 5000 }).catch(() => undefined);
+    check("Salvar fecha o editor e avisa só depois do servidor confirmar", (await pageA.getByRole("dialog").count()) === 0);
+    check("Configurações mostram o nome normalizado", norm(await pageA.locator("main").first().innerText()).includes("João Pedro"));
+
+    // persistiu no servidor, não só na tela
+    const afterSave = await (await ctxA.request.get("/api/snapshot")).json();
+    check("O servidor guardou o nome normalizado", afterSave.profile.displayName === "João Pedro", afterSave.profile.displayName);
+    await pageA.reload();
+    await appReady(pageA);
+    check("Depois de recarregar o nome continua", norm(await pageA.locator("main").first().innerText()).includes("João Pedro"));
+    await pageA.goto("/inicio");
+    await appReady(pageA);
+    check("A saudação da Home usa o novo nome", norm(await pageA.locator("h1").first().innerText()).includes("João Pedro"));
+    check("O avatar do cabeçalho usa a nova inicial", (await header().innerText()).trim() === "J");
+    await pageA.goto("/configuracoes");
+    await appReady(pageA);
+
+    // volta ao nome original para não afetar o resto do roteiro
+    const again = await openEditor();
+    await again.fill("pedro");
+    await saveButton().click();
+    await toast(pageA, "Nome atualizado").waitFor();
+    check("O nome volta ao original", (await (await ctxA.request.get("/api/snapshot")).json()).profile.displayName === "pedro");
+  }
+
   /* ===== 8. isolamento: o usuário B não enxerga nada de A ===== */
   {
     const ctx = await newContext();
@@ -980,6 +1035,7 @@ try {
     await appReady(page);
     check("B: a tela de finanças está vazia (sem os lançamentos de A)", (await page.getByText("Outback teste").count()) === 0);
     const hacked = await ctx.request.post("/api/snapshot", { data: {} });
+    check("B: o nome de exibição é o dele (o perfil de A não vazou nem foi tocado)", snap.profile.displayName === "outro", snap.profile.displayName);
     check("POST em /api/snapshot não é aceito", hacked.status() === 405, String(hacked.status()));
     await ctx.close();
   }

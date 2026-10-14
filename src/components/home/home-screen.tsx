@@ -83,7 +83,7 @@ function HomeScreenContent() {
   return (
     <div className="space-y-6 px-4">
       <div className="pt-1">
-        <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">
+        <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight break-words">
           {greetingFor(hourFromInstant(now))}, {name}
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">{capitalize(formatDayLong(today))}</p>
