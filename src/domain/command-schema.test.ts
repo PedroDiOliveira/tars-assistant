@@ -96,6 +96,12 @@ async function commandsGeneratedByTheApp(): Promise<Command[]> {
   await a.updateRunningSession(id, { occurredOn: "2026-10-05" });
   await a.deleteRunningSession(id);
   await a.setGoal({ kind: "running_meters", scopeId: null, validFrom: "2026-10-05", target: 20_000 });
+  // água: cada toque é um registro com id próprio; o instante pode vir do chamador (registro avulso)
+  await a.addWater({ ml: 500 });
+  await a.addWater({ ml: 100, at: NOW - 3_600_000 });
+  await a.addWater({ ml: 1000, id });
+  await a.removeWater(id);
+  await a.setGoal({ kind: "water_ml", scopeId: null, validFrom: "2026-10-05", target: 2500 });
   return captured;
 }
 
@@ -120,7 +126,7 @@ describe("o que o app gera passa no schema", () => {
       "running.updateSession", "study.discard", "study.finish",
       "study.pause", "study.resume", "study.start", "studySession.add", "studySession.delete", "studySession.update",
       "subject.add", "subject.archive", "subject.update", "template.add", "template.delete", "transaction.add",
-      "transaction.delete", "transaction.update", "workout.deleteSession", "workout.finish",
+      "transaction.delete", "transaction.update", "water.add", "water.remove", "workout.deleteSession", "workout.finish",
     ].sort());
   });
 });
@@ -347,6 +353,56 @@ describe("recusa o que é inválido", () => {
       expect(reject(goal({ target: 1_000_000 }))).toMatchObject({ ok: true });
       expect(reject(goal({ target: 1_000_001 }))).toMatchObject({ ok: false, error: "A meta semanal de corrida pode ir até 1.000 km." });
       expect(reject(goal({ target: 12.5 }))).toMatchObject({ ok: false });
+      expect(reject(goal({ scopeId: uid() }))).toMatchObject({ ok: false, error: "Esta meta não tem escopo." });
+    });
+  });
+
+  describe("água", () => {
+    const add = (over: Record<string, unknown> = {}, nowMs: unknown = NOW) => ({
+      type: "water.add",
+      nowMs,
+      intake: { id: uid(), at: NOW - 60_000, ml: 500, ...over },
+    });
+
+    it("um registro válido passa", () => {
+      expect(reject(add())).toMatchObject({ ok: true });
+      expect(reject(add({ ml: 1 }))).toMatchObject({ ok: true });
+      expect(reject(add({ ml: 5000 }))).toMatchObject({ ok: true });
+    });
+
+    it("quantidade: zero, negativa, fracionada, nula, em texto e acima de 5 L são recusadas (mesma mensagem do reducer)", () => {
+      for (const ml of [0, -1, 1.5, null, "500", 5001, NaN]) {
+        expect(reject(add({ ml })), String(ml)).toMatchObject({ ok: false, error: "Quantidade de água inválida." });
+      }
+    });
+
+    it("instante: inteiro em ms; id, campos desconhecidos e nowMs ausente são recusados", () => {
+      expect(reject(add({ at: 1.5 }))).toMatchObject({ ok: false });
+      expect(reject(add({ at: -1 }))).toMatchObject({ ok: false });
+      expect(reject(add({ at: "2026-10-07T10:00:00Z" }))).toMatchObject({ ok: false });
+      expect(reject(add({ id: "w-1" }))).toMatchObject({ ok: false, error: "Identificador inválido." });
+      expect(reject(add({ userId: uid() }))).toMatchObject({ ok: false }); // um userId plantado nunca é ignorado
+      expect(reject(add({ day: "2026-10-07" }))).toMatchObject({ ok: false }); // o dia é derivado do instante, nunca enviado
+      expect(reject({ ...add(), nowMs: undefined })).toMatchObject({ ok: false });
+    });
+
+    it("remover recebe só o id", () => {
+      expect(reject({ type: "water.remove", id: uid() })).toMatchObject({ ok: true });
+      expect(reject({ type: "water.remove", id: "x" })).toMatchObject({ ok: false });
+      expect(reject({ type: "water.remove", id: uid(), extra: 1 })).toMatchObject({ ok: false });
+    });
+
+    it("meta de água: ml POR DIA, vigência numa segunda-feira, de 0 (removida) até 10 L", () => {
+      const goal = (over: Record<string, unknown>) => ({
+        type: "goal.set",
+        goal: { id: uid(), kind: "water_ml", scopeId: null, validFrom: "2026-10-05", target: 2500, ...over },
+      });
+      expect(reject(goal({}))).toMatchObject({ ok: true });
+      expect(reject(goal({ target: 0 }))).toMatchObject({ ok: true });
+      expect(reject(goal({ target: 10_000 }))).toMatchObject({ ok: true });
+      expect(reject(goal({ target: 10_001 }))).toMatchObject({ ok: false, error: "A meta diária de água pode ir até 10 L." });
+      expect(reject(goal({ validFrom: "2026-10-07" }))).toMatchObject({ ok: false, error: "A vigência deve começar numa segunda-feira." });
+      expect(reject(goal({ target: 2500.5 }))).toMatchObject({ ok: false });
       expect(reject(goal({ scopeId: uid() }))).toMatchObject({ ok: false, error: "Esta meta não tem escopo." });
     });
   });

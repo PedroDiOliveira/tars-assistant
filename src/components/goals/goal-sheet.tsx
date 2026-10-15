@@ -6,10 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/shared/segmented";
 import { Sheet, SheetFooter } from "@/components/shared/sheet";
 import { DistanceField } from "@/components/shared/distance-field";
+import { UnitField } from "@/components/shared/unit-field";
 import { GOAL_PERIOD } from "@/domain/goals";
 import { centsFromDigits, formatBRL } from "@/domain/money";
 import { formatDistance, kmInputText, MAX_WEEKLY_GOAL_METERS, parseDistanceKm } from "@/domain/running";
 import type { GoalKind } from "@/domain/types";
+import { litersInputText, parseLiters } from "@/domain/water";
 import { useActions, useToday } from "@/data";
 import { addDays, addMonths, monthOf, monthStart, weekStart } from "@/lib/dates";
 import { formatMinutes } from "@/lib/format";
@@ -20,7 +22,7 @@ export interface GoalTarget {
   scopeId: string | null;
   /** nome exibido no título, ex.: "Treinos por semana" */
   title: string;
-  /** meta vigente hoje (centavos, sessões, minutos, páginas ou metros) */
+  /** meta vigente hoje (centavos, sessões, minutos, páginas, metros ou ml por dia) */
   current: number | null;
 }
 
@@ -37,6 +39,7 @@ const UNIT: Record<GoalKind, string> = {
   study_minutes: "minutos por semana",
   reading_pages: "páginas por semana",
   running_meters: "km por semana",
+  water_ml: "litros por dia",
 };
 
 export function GoalSheet({ open, onOpenChange, target }: GoalSheetProps) {
@@ -72,9 +75,21 @@ function GoalForm({ target, onDone }: { target: GoalTarget; onDone: () => void }
       ? `A meta semanal pode ir até ${formatDistance(MAX_WEEKLY_GOAL_METERS)}.`
       : null;
 
-  const [numeric, setNumeric] = useState<number>(isRunning ? 0 : (target.current ?? 0));
-  const value = isRunning ? (runningMeters ?? 0) : numeric;
-  const canSave = isRunning ? runningMeters !== null && runningMeters > 0 && runningError === null : numeric > 0;
+  // A meta de água é guardada em ML POR DIA, inteiros, mas digitada em LITROS ("2,5"): campo de texto validado por
+  // `parseLiters`, pelo mesmo motivo da corrida (apagar a vírgula de "2,5" não pode virar 25).
+  const isWater = target.kind === "water_ml";
+  const [litersText, setLitersText] = useState(litersInputText(target.current ?? undefined));
+  const liters = parseLiters(litersText);
+  const waterMl = liters.ok ? liters.ml : null;
+  const waterError = !liters.ok && litersText.trim() !== "" ? liters.error : null;
+
+  const [numeric, setNumeric] = useState<number>(isRunning || isWater ? 0 : (target.current ?? 0));
+  const value = isRunning ? (runningMeters ?? 0) : isWater ? (waterMl ?? 0) : numeric;
+  const canSave = isRunning
+    ? runningMeters !== null && runningMeters > 0 && runningError === null
+    : isWater
+      ? waterMl !== null && waterMl > 0 && waterError === null
+      : numeric > 0;
   const [from, setFrom] = useState<"now" | "next">("now");
 
   const currentStart = monthly ? monthStart(monthOf(today)) : weekStart(today);
@@ -102,7 +117,28 @@ function GoalForm({ target, onDone }: { target: GoalTarget; onDone: () => void }
         <label htmlFor="goal-value" className="text-sm font-medium">
           {isMoney ? "Valor da meta (por mês)" : `Meta (${UNIT[target.kind]})`}
         </label>
-        {isRunning ? (
+        {isWater ? (
+          <>
+            <UnitField
+              id="goal-value"
+              unit="L"
+              value={litersText}
+              onChange={setLitersText}
+              invalid={waterError !== null}
+              describedBy={waterError ? "goal-value-error" : "goal-value-hint"}
+              placeholder="Ex.: 2,5"
+            />
+            {waterError ? (
+              <p id="goal-value-error" role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger-ink">
+                {waterError}
+              </p>
+            ) : (
+              <p id="goal-value-hint" className="text-sm text-muted-foreground">
+                Referência comum: 2 a 3 litros por dia. Siga a orientação do seu médico.
+              </p>
+            )}
+          </>
+        ) : isRunning ? (
           <>
             <DistanceField
               id="goal-value"
@@ -154,6 +190,9 @@ function GoalForm({ target, onDone }: { target: GoalTarget; onDone: () => void }
             { value: "next", label: monthly ? "Próximo mês" : "Próxima semana" },
           ]}
         />
+        {isWater ? (
+          <p className="text-sm text-muted-foreground">A meta é por dia e vale a partir da segunda-feira da semana escolhida.</p>
+        ) : null}
       </div>
 
       <SheetFooter>

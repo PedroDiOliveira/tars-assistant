@@ -568,6 +568,94 @@ describe("paridade — corrida", () => {
   });
 });
 
+/* ---------- água (migração 0015) ---------- */
+
+describe("paridade — água", () => {
+  const NOON = Date.UTC(2026, 9, 14, 15, 0); // 14/10/2026 12:00 em São Paulo
+  const at = (day: string, hour: number, minute = 0) => Date.parse(`${day}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00-03:00`);
+  type Intake = { id: string; at: number; ml: number };
+  const addWater = (intake: Intake, nowMs = NOON): Command => ({ type: "water.add", intake, nowMs });
+
+  it("adicionar vários toques, repetir o mesmo id, remover e remover de novo", async () => {
+    const s = await Scenario.start();
+    const [a, b, c] = [uid(), uid(), uid()];
+
+    await s.step(addWater({ id: a, at: at("2026-10-14", 8, 15), ml: 500 }));
+    const second = addWater({ id: b, at: at("2026-10-14", 10, 40), ml: 1000 });
+    await s.step(second);
+    await s.step(second); // repetição (toque duplo / resposta perdida): não duplica
+    await s.step(addWater({ id: b, at: at("2026-10-14", 11), ml: 1 })); // mesmo id, outro conteúdo: o primeiro vale
+    await s.step(addWater({ id: c, at: at("2026-10-14", 8, 15), ml: 100 })); // mesmo instante que `a`: toques em rajada
+    expect(s.state.waterIntakes).toHaveLength(3);
+    expect(s.state.waterIntakes.find((w) => w.id === b)).toEqual({ id: b, at: at("2026-10-14", 10, 40), ml: 1000 });
+
+    await s.step({ type: "water.remove", id: a });
+    await s.step({ type: "water.remove", id: a }); // já não existe: não é erro
+    await s.step({ type: "water.remove", id: uid() });
+    expect(s.state.waterIntakes.map((w) => w.id).sort()).toEqual([b, c].sort());
+  });
+
+  it("os limites de quantidade têm a MESMA mensagem: 0, negativo e 5001 recusados; 1 e 5000 aceitos", async () => {
+    const s = await Scenario.start();
+    for (const ml of [0, -1, 5001]) {
+      expect((await s.step(addWater({ id: uid(), at: NOON, ml }))).error, String(ml)).toBe("Quantidade de água inválida.");
+    }
+    await s.step(addWater({ id: uid(), at: NOON, ml: 1 }));
+    await s.step(addWater({ id: uid(), at: NOON, ml: 5000 }));
+    expect(s.state.waterIntakes).toHaveLength(2);
+  });
+
+  it("a janela de horário: 5 min de folga no futuro; hoje e ontem valem, anteontem não (mesmas mensagens)", async () => {
+    const s = await Scenario.start();
+    await s.step(addWater({ id: uid(), at: NOON + 5 * 60_000, ml: 100 }));
+    expect((await s.step(addWater({ id: uid(), at: NOON + 5 * 60_000 + 1, ml: 100 }))).error).toBe("Horário no futuro.");
+    await s.step(addWater({ id: uid(), at: at("2026-10-13", 0, 0), ml: 100 }));
+    expect((await s.step(addWater({ id: uid(), at: at("2026-10-12", 23, 59) + 59_999, ml: 100 }))).error).toBe("Só é possível registrar água de hoje e de ontem.");
+    expect(s.state.waterIntakes).toHaveLength(2);
+  });
+
+  it("o fuso decide o dia: 23h30 em São Paulo (já dia seguinte em UTC) e 00h30", async () => {
+    const s = await Scenario.start();
+    const late = Date.UTC(2026, 9, 15, 2, 30); // 14/10 23:30 em SP
+    await s.step(addWater({ id: uid(), at: at("2026-10-13", 0, 0), ml: 100 }, late)); // ontem
+    expect((await s.step(addWater({ id: uid(), at: at("2026-10-12", 23, 59), ml: 100 }, late))).error).toMatch(/hoje e de ontem/);
+    const after = Date.UTC(2026, 9, 15, 3, 30); // 15/10 00:30 em SP
+    await s.step(addWater({ id: uid(), at: at("2026-10-14", 0, 0), ml: 100 }, after)); // agora o dia 14 é ontem
+    expect((await s.step(addWater({ id: uid(), at: at("2026-10-13", 23, 59), ml: 100 }, after))).error).toMatch(/hoje e de ontem/);
+  });
+
+  it("remover não depende do relógio: um registro antigo continua removível (mesma regra nos dois lados)", async () => {
+    const s = await Scenario.start();
+    const id = uid();
+    await s.step(addWater({ id, at: at("2026-10-14", 9), ml: 250 }));
+    // Semanas depois o registro já é "antigo demais" para ser CRIADO, mas remover nunca olha o relógio.
+    await t.setNow(Date.UTC(2026, 10, 20, 15));
+    await s.step({ type: "water.remove", id });
+    expect(s.state.waterIntakes).toEqual([]);
+  });
+
+  it("meta diária de água: nova, vigência futura, substituição (mantém o id) e remoção (0), em ml por dia", async () => {
+    const s = await Scenario.start();
+    const goal = (validFrom: string, target: number): Command => ({
+      type: "goal.set", goal: { id: uid(), kind: "water_ml", scopeId: null, validFrom, target },
+    });
+    await s.step(goal("2026-10-12", 2500));
+    await s.step(goal("2026-10-12", 3000)); // mesma vigência: substitui
+    await s.step(goal("2026-10-19", 2000)); // próxima semana
+    await s.step(goal("2026-10-26", 0)); // removida daqui para a frente
+    expect(s.state.goals.filter((g) => g.kind === "water_ml").map((g) => [g.validFrom, g.target])).toEqual([
+      ["2026-10-12", 3000], ["2026-10-19", 2000], ["2026-10-26", 0],
+    ]);
+  });
+
+  it("água não toca as demais coleções (treinos, estudos, leituras, corridas)", async () => {
+    const s = await Scenario.start();
+    const before = JSON.stringify({ ...s.state, waterIntakes: [] });
+    await s.step(addWater({ id: uid(), at: NOON, ml: 500 }));
+    expect(JSON.stringify({ ...s.state, waterIntakes: [] })).toBe(before);
+  });
+});
+
 describe("snapshot", () => {
   it("devolve o relógio do servidor (para corrigir a diferença do relógio do aparelho)", async () => {
     const s = await Scenario.start();

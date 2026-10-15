@@ -31,7 +31,7 @@ Paleta definida pelo Pedro, aplicada a todo o app:
 Regras que vieram junto:
 
 - **Tudo sai de [src/app/globals.css](../src/app/globals.css)**: mudar a identidade é mexer só nas variáveis do topo.
-- **Nada de cor fora da família verde.** Categorias, matérias e capas de livro continuam se distinguindo por matiz, mas restrito à faixa 95–185 (lime → esmeralda → teal) em [src/lib/hues.ts](../src/lib/hues.ts). Antes eram matizes de todo o círculo cromático e destoavam.
+- **Nada de cor fora da família verde.** Categorias, matérias e capas de livro continuam se distinguindo por matiz, mas restrito à faixa 95–185 (lime → esmeralda → teal) em [src/lib/hues.ts](../src/lib/hues.ts). Antes eram matizes de todo o círculo cromático e destoavam. A **água** usa o azul-água no limite da faixa (matiz 185, `--water*` em [globals.css](../src/app/globals.css)), distinto do teal do Estudo (171): lê como água sem abrir exceção.
 - As cores por módulo deixaram de ser cores avulsas (índigo/laranja/azul/rosa) e passaram a ser variações da mesma família.
 - Ícone do app, `theme-color` do navegador e manifesto do PWA seguem a paleta.
 
@@ -49,7 +49,7 @@ O protótipo mostrava informação demais de uma vez. Princípio adotado: **uma 
 
 | Tela | Antes | Agora |
 | --- | --- | --- |
-| Início | 4 cartões grandes com anel, selo de %, duas linhas de detalhe cada; seções de atenção (4 itens) e de sequências | 1 destaque (resultado do mês, número grande), 4 ações rápidas circulares, 1 cartão "Esta semana" com 3 linhas, no máximo 2 avisos. Sequências saíram para dentro dos módulos |
+| Início | 4 cartões grandes com anel, selo de %, duas linhas de detalhe cada; seções de atenção (4 itens) e de sequências | 1 destaque (resultado do mês, número grande), 4 ações rápidas circulares, 1 cartão de **água** (contador de um toque), 1 cartão "Esta semana" com 4 linhas, no máximo 2 avisos. Sequências saíram para dentro dos módulos |
 | Finanças | resumo + 2 caixas + meta + todas as categorias + 3 controles de filtro sempre visíveis | destaque do mês, 4 categorias (+ "ver todas"), filtros atrás do botão "Filtrar", lista por dia paginada |
 | Treino | 3 cartões de ficha altos com botão largo | lista compacta com botão de play; histórico 3 itens; evolução 4 itens (+ "ver todos") |
 | Estudos | segmentos semana/mês, todas as matérias, 10 sessões | só semana, 5 sessões (+ "mostrar mais") |
@@ -136,3 +136,22 @@ O assistente respondia com texto puro (`whitespace-pre-line`), o que escondia n�
 - **A conversa mora só na memória do navegador** (store zustand, sem localStorage nem banco): tocar num link do card e voltar não zera o chat, recarregar apaga, e sair da conta recarrega a página de propósito. Persistir o histórico exigiria tabela, RLS e retenção, e fica fora do escopo.
 - **Texto do modelo é entrada não confiável.** O renderizador próprio (`lib/reply-text.ts`) só entende parágrafos, **negrito** e listas; tabelas viram linhas "a · b", títulos viram negrito, links viram só o texto, e tudo é desenhado como nó de texto do React (nunca HTML). Sem dependência nova.
 - **Falha do modelo depois de achar os números** (resposta vazia ou laço de ferramentas esgotado) devolve um texto fixo mais os cards, em vez de uma tela de erro. Timeout, limite e falhas de infraestrutura continuam sendo erro, e o gasto de tokens segue registrado.
+
+## Água
+
+Contador de hidratação, no cartão que fica **acima de "Esta semana"** na Início e numa tela própria, `/agua` (sem aba na navegação inferior: o cartão e Configurações levam até ela). Registra no ritmo real do hábito: um toque, e o resto (porção, desfazer, meta) fica ao redor.
+
+- **Por que na Início, e por que um cartão novo.** As outras áreas têm cadência semanal; a água é diária e curta. A Início já era "1 destaque + 4 ações + 1 cartão semanal + até 2 avisos"; o cartão de água é a quinta peça, mantido compacto (o total, a meta e o botão cabem sem rolar e o "Esta semana" aparece logo abaixo).
+- **Gota + três porções.** Copo, garrafa e garrafa grande, com a do meio (garrafa) selecionada. Escolher uma porção **não soma nada**; quem soma é a gota, e o rótulo dela diz sempre quanto vai somar ("+500 ml"). Padrão 100 ml, 500 ml e 1 L, **editáveis** (de 1 ml a 5 L, em ordem crescente) e guardados só no aparelho. Os ícones são SVG próprios, no traço do app, em vez de emoji (que muda de desenho entre sistemas, destoa dos demais ícones e não anima).
+- **Desfazer em vez de confirmar.** Um toque errado (selecionar 1 L e tocar sem querer) se corrige no próprio cartão: "Desfazer +1 L" aparece no cabeçalho por 6 segundos. Fica no cabeçalho, que nunca muda de altura, para o aviso não empurrar a gota debaixo do dedo nem ir parar atrás da barra de navegação. Remove exatamente o registro do toque (cada toque tem id próprio).
+- **Sem aviso de sucesso por toque.** Seria ruído a cada gole; o total que sobe e o "Desfazer" já respondem. O erro, sim, avisa, uma vez só mesmo que vários toques falhem em sequência.
+- **Meta diária.** Em litros ("2,5"), guardada em ml por dia, com vigência a partir da segunda-feira da semana escolhida ("esta semana" ou "próxima"): trocar a meta não reescreve semanas passadas, mas reavalia os dias já passados da semana atual. Referência na tela: "2 a 3 litros por dia. Siga a orientação do seu médico": o app não prescreve quantidade. Passar da meta é sucesso (barra cheia, "Meta batida · 2,1 L acima"), nunca vermelho.
+- **Indicadores.** "X de 7 dias na meta" (a semana de segunda a domingo, só os dias que já passaram), a sequência de dias seguidos e a melhor sequência. A sequência é diária, mas o dia **em andamento** nunca a zera: só um dia encerrado sem a meta a interrompe. A média considera só os dias **com registro** (um dia esquecido não puxa a média para baixo) e é arredondada a 10 ml.
+- **Tela `/agua`.** Hoje (copo que enche, meta, sequência), o contador, os registros de hoje (remover com "Desfazer"), "Outra quantidade" (registro avulso de hoje ou de ontem, com horário), a semana (barras com a linha da meta e os números), o mês (calendário em que cada dia fica mais escuro quanto mais perto da meta; tocar abre os registros do dia) e o ritmo do dia (manhã 5h-12h, tarde 12h-18h, noite 18h-5h, nos últimos 30 dias, com uma frase só quando há dados suficientes: 3 dias e 3 L).
+- **Remover num dia antigo.** O servidor só aceita registrar hoje e ontem, então desfazer a remoção de um dia mais antigo seria recusado. Nesses dias remover pede confirmação e avisa que não dá para desfazer. Dentro de uma folha o "Desfazer" fica na própria folha: com o modal aberto um toast não recebe toque.
+- **Aviso de ritmo, só dentro do app.** Entre 14h e 22h, com menos de 60% do que seria esperado para a hora (a meta sobe em linha reta das 7h às 22h), a Início mostra um aviso informativo ("Hoje você bebeu 0 L de 2,5 L: faltam 2,5 L"), nunca de alarme. Sem notificação push (a spec deixa para depois) e sem aviso quando não há meta.
+- **Offline.** Segue a regra do app (decisão sobre PWA): sem conexão o toque **não é salvo**, o total volta ao que o servidor tem e um aviso diz isso. Uma fila local de toques, que seria o ganho mais óbvio para água, fica como evolução e exige uma decisão própria (reverte "sem escrita offline").
+- **Assistente.** Não registra água (convenção: a IA nunca escreve, e um toque é mais rápido que uma frase). Consultar por chat ("quanto bebi esta semana?") fica para depois: cada ferramenta nova aumenta os tokens de toda pergunta no plano gratuito.
+- **Dados e fuso.** O dia vem do instante em `America/Sao_Paulo`: um toque às 23h58 é do dia, às 00h01 é do dia seguinte, no cliente e no banco. Uma regra só, provada pelo teste de paridade e por um e2e que atravessa a meia-noite com o relógio do navegador.
+- **Fora da primeira versão:** lembretes por notificação, fila offline de toques, outras bebidas, sugestão de meta por peso ou clima, registro por linguagem natural e compactação de dias antigos.
+

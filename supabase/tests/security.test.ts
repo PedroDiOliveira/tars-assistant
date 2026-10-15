@@ -15,7 +15,7 @@ async function populate(userId: string) {
     "select id from public.exercises where user_id = $1 limit 1", [userId]);
   const ids = {
     category: cat.id, exercise: ex.id, tx: uid(), tpl: uid(), subject: uid(), studySession: uid(),
-    goal: uid(), plan: uid(), session: uid(), book: uid(), reading: uid(), running: uid(),
+    goal: uid(), plan: uid(), session: uid(), book: uid(), reading: uid(), running: uid(), water: uid(),
   };
   const SE = "00000000-0000-4000-8000-0000000000aa";
   const statements: [string, unknown[]][] = [
@@ -44,6 +44,8 @@ async function populate(userId: string) {
       values ($1, $2, $3, '2026-10-07', 0, 20)`, [ids.reading, userId, ids.book]],
     [`insert into public.running_sessions (id, user_id, occurred_on, distance_meters, duration_seconds)
       values ($1, $2, '2026-10-07', 5200, 1800)`, [ids.running, userId]],
+    [`insert into public.water_intakes (id, user_id, occurred_at, ml)
+      values ($1, $2, now(), 500)`, [ids.water, userId]],
   ];
   for (const [sql, params] of statements) await t.admin(sql, params);
   return ids;
@@ -100,7 +102,7 @@ describe("isolamento entre usuários (RLS)", () => {
   const TABLES = [
     "categories", "transactions", "tx_templates", "goals", "exercises", "workout_plans",
     "workout_plan_exercises", "workout_sessions", "session_exercises", "exercise_sets",
-    "study_subjects", "study_sessions", "study_timers", "books", "reading_sessions", "running_sessions",
+    "study_subjects", "study_sessions", "study_timers", "books", "reading_sessions", "running_sessions", "water_intakes",
   ];
 
   it.each(TABLES)("%s: B não enxerga nenhuma linha de A", async (table) => {
@@ -172,12 +174,13 @@ describe("isolamento entre usuários (RLS)", () => {
   it("o snapshot de B não contém nada de A", async () => {
     const snap = await t.as(B, (s) => s.snapshot());
     const serialized = JSON.stringify(snap);
-    for (const id of [a.tx, a.subject, a.book, a.plan, a.session, a.goal, a.tpl, a.running]) {
+    for (const id of [a.tx, a.subject, a.book, a.plan, a.session, a.goal, a.tpl, a.running, a.water]) {
       expect(serialized).not.toContain(id);
     }
     expect(snap.data.transactions).toHaveLength(0);
     expect(snap.data.timer).toBeNull();
     expect(snap.data.runningSessions).toEqual([]);
+    expect(snap.data.waterIntakes).toEqual([]);
     expect(snap.profile?.displayName).toBe("bruno");
   });
 
@@ -200,6 +203,28 @@ describe("isolamento entre usuários (RLS)", () => {
     expect(await t.as(B, (s) => sqlState(s.query("update public.running_sessions set user_id = $1 where id = $2", [A, mine])))).toBe("42501");
   });
 
+  it("água: B não apaga o registro de A, nem por tabela nem por comando", async () => {
+    await t.as(B, async (s) => {
+      expect(await s.query("delete from public.water_intakes where id = $1 returning id", [a.water])).toHaveLength(0);
+      await s.command({ type: "water.remove", id: a.water });
+    });
+    const [row] = await t.admin<{ ml: number }>("select ml from public.water_intakes where id = $1", [a.water]);
+    expect(row.ml).toBe(500);
+  });
+
+  it("água: B não cria um registro em nome de A (WITH CHECK) nem reutiliza o id de A em um comando", async () => {
+    expect(await t.as(B, (s) => sqlState(s.query(
+      "insert into public.water_intakes (id, user_id, occurred_at, ml) values ($1, $2, now(), 100)", [uid(), A])))).toBe("42501");
+    const taken = await t.as(B, (s) => sqlMessage(s.command({ type: "water.add", nowMs: Date.now(), intake: { id: a.water, at: Date.now(), ml: 100 } })));
+    expect(taken).toBe("Este identificador de registro de água já está em uso.");
+  });
+
+  it("água é imutável: nem o dono consegue UPDATE (o privilégio nem existe)", async () => {
+    expect(await t.as(A, (s) => sqlState(s.query("update public.water_intakes set ml = 1 where id = $1", [a.water])))).toBe("42501");
+    const [row] = await t.admin<{ ml: number }>("select ml from public.water_intakes where id = $1", [a.water]);
+    expect(row.ml).toBe(500);
+  });
+
   it("comando de B não afeta A: excluir o lançamento de A com o id dele não apaga nada", async () => {
     await t.as(B, (s) => s.command({ type: "transaction.delete", id: a.tx }));
     const [row] = await t.admin<{ n: number }>("select count(*)::int as n from public.transactions where id = $1", [a.tx]);
@@ -208,7 +233,7 @@ describe("isolamento entre usuários (RLS)", () => {
 });
 
 describe("sem login (papel anon)", () => {
-  it.each(["transactions", "profiles", "categories", "study_timers", "running_sessions"])("não lê %s", async (table) => {
+  it.each(["transactions", "profiles", "categories", "study_timers", "running_sessions", "water_intakes"])("não lê %s", async (table) => {
     expect(await t.anon((s) => sqlState(s.query(`select * from public.${table}`)))).toBe("42501");
   });
 
@@ -288,7 +313,7 @@ describe("permissões de execução (trava contra função nova esquecida)", () 
     // todo comando existente é executável (senão o despachante falharia só em produção)
     const allCommands = fns.filter((f) => f.name.startsWith("cmd_")).length;
     expect(commands).toHaveLength(allCommands);
-    expect(allCommands).toBeGreaterThanOrEqual(36); // 33 anteriores + os 3 de corrida
+    expect(allCommands).toBeGreaterThanOrEqual(38); // 33 anteriores + 3 de corrida + 2 de água
   });
 
   it("só as funções `security definer` CONHECIDAS existem (cada uma é uma elevação de privilégio consciente)", async () => {
@@ -314,7 +339,7 @@ describe("permissões de execução (trava contra função nova esquecida)", () 
   });
 
   it("as funções de cadastro e os gatilhos NÃO são executáveis por quem está logado", () => {
-    const internal = ["seed_defaults", "handle_new_user", "set_updated_at", "reading_session_within_book", "book_pages_cover_readings", "running_session_not_future"];
+    const internal = ["seed_defaults", "handle_new_user", "set_updated_at", "reading_session_within_book", "book_pages_cover_readings", "running_session_not_future", "water_intake_valid_time"];
     for (const name of internal) {
       const fn = fns.find((f) => f.name === name);
       expect(fn, name).toBeDefined();

@@ -28,6 +28,7 @@ const payload = (): SnapshotPayload => ({
 });
 const cached = () => queryClient.getQueryData<SnapshotPayload>(SNAPSHOT_KEY)!;
 const runs = () => cached().data.runningSessions;
+const water = () => cached().data.waterIntakes;
 const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
 
 function deferred<T>() {
@@ -130,6 +131,143 @@ describe("camada remota: escrita otimista confirmada pelo servidor", () => {
     server.mockResolvedValueOnce(fail("Sem conexão com o servidor. Nada foi salvo.", "offline"));
     expect(await actions.deleteRunningSession("run-1")).toMatchObject({ ok: false });
     expect(runs()).toEqual([{ id: "run-1", occurredOn: today(), distanceMeters: 5000 }]);
+  });
+});
+
+describe("camada remota: toques de água em rajada", () => {
+  const offline = () => fail("Sem conexão com o servidor. Nada foi salvo.", "offline");
+
+  it("o toque aparece na hora (otimista) e o total só deixa de ser provisório quando o servidor confirma", async () => {
+    const pending = deferred<Result<Outcome>>();
+    server.mockReturnValue(pending.promise);
+
+    const tap = actions.addWater({ id: "w1", ml: 500 });
+    await vi.waitFor(() => expect(water()).toHaveLength(1));
+    expect(water()[0]).toMatchObject({ id: "w1", ml: 500 });
+
+    pending.resolve(ok<Outcome>("saved"));
+    expect(await tap).toEqual(ok({ id: "w1" }));
+    expect(water()).toHaveLength(1);
+  });
+
+  it("cinco toques seguidos SEM rede: nenhum fica na tela (o total volta ao que o servidor tem)", async () => {
+    // Toques de verdade são espaçados: cada um enxerga na tela o efeito otimista dos anteriores, e o servidor
+    // (que atende um de cada vez) só responde depois de todos. Nenhuma resposta chega antes do último toque.
+    const gates = [1, 2, 3, 4, 5].map(() => deferred<Result<Outcome>>());
+    let call = 0;
+    server.mockImplementation(() => gates[call++].promise);
+    const before = cached();
+
+    const taps: Promise<Result<{ id: string }>>[] = [];
+    for (let n = 1; n <= 5; n += 1) {
+      taps.push(actions.addWater({ id: `w${n}`, ml: 100 }));
+      await vi.waitFor(() => expect(water()).toHaveLength(n)); // o toque aparece na hora
+    }
+    for (const gate of gates) gate.resolve(offline());
+    const results = await Promise.all(taps);
+
+    expect(results.every((r) => !r.ok)).toBe(true);
+    expect(water()).toEqual([]);
+    expect(cached()).toEqual(before);
+  });
+
+  it("servidor fora do ar (a chamada lança) no meio da rajada: o que não foi salvo sai, o que foi salvo fica", async () => {
+    server.mockResolvedValueOnce(ok<Outcome>("saved")); // w1 salvou
+    server.mockRejectedValueOnce(new Error("fetch failed")); // w2 caiu
+    server.mockResolvedValueOnce(ok<Outcome>("saved")); // w3 salvou
+
+    const results = await Promise.all([
+      actions.addWater({ id: "w1", ml: 100 }),
+      actions.addWater({ id: "w2", ml: 200 }),
+      actions.addWater({ id: "w3", ml: 300 }),
+    ]);
+
+    expect(results.map((r) => r.ok)).toEqual([true, false, true]);
+    expect(water().map((w) => w.id).sort()).toEqual(["w1", "w3"]);
+    expect(water().reduce((sum, w) => sum + w.ml, 0)).toBe(400);
+  });
+
+  it("a falha é do toque que falhou: o primeiro cai e os seguintes continuam valendo", async () => {
+    server.mockResolvedValueOnce(offline());
+    server.mockResolvedValueOnce(ok<Outcome>("saved"));
+    server.mockResolvedValueOnce(ok<Outcome>("saved"));
+
+    await Promise.all([
+      actions.addWater({ id: "w1", ml: 100 }),
+      actions.addWater({ id: "w2", ml: 200 }),
+      actions.addWater({ id: "w3", ml: 300 }),
+    ]);
+    expect(water().map((w) => w.id).sort()).toEqual(["w2", "w3"]);
+  });
+
+  it("desfazer enquanto o toque ainda está a caminho: some da tela e o servidor recebe adicionar e depois remover", async () => {
+    const slow = deferred<Result<Outcome>>();
+    server.mockReturnValueOnce(slow.promise); // add: demora
+    server.mockResolvedValueOnce(ok<Outcome>("saved")); // remove
+
+    const tap = actions.addWater({ id: "w1", ml: 500 });
+    await vi.waitFor(() => expect(water()).toHaveLength(1));
+    const undo = actions.removeWater("w1");
+    await vi.waitFor(() => expect(water()).toHaveLength(0));
+
+    slow.resolve(ok<Outcome>("saved"));
+    expect(await Promise.all([tap, undo])).toEqual([ok({ id: "w1" }), ok()]);
+    expect(water()).toEqual([]);
+    expect(server.mock.calls.map(([command]) => (command as { type: string }).type)).toEqual(["water.add", "water.remove"]);
+  });
+
+  it("desfazer que FALHA devolve o registro à tela (continua salvo no servidor)", async () => {
+    server.mockResolvedValueOnce(ok<Outcome>("saved"));
+    await actions.addWater({ id: "w1", ml: 500 });
+    const saved = cached();
+
+    server.mockResolvedValueOnce(offline());
+    expect(await actions.removeWater("w1")).toMatchObject({ ok: false });
+    expect(cached()).toEqual(saved);
+    expect(water()).toHaveLength(1);
+  });
+
+  it("nova tentativa do MESMO toque depois de uma resposta perdida: um registro só, com o mesmo id no servidor", async () => {
+    server.mockResolvedValueOnce(offline());
+    server.mockResolvedValueOnce(ok<Outcome>("saved"));
+    const input = { id: "w1", ml: 500 };
+
+    expect(await actions.addWater(input)).toMatchObject({ ok: false });
+    expect(water()).toEqual([]);
+    expect(await actions.addWater(input)).toEqual(ok({ id: "w1" }));
+    expect(water()).toHaveLength(1);
+    expect(server.mock.calls.map(([command]) => (command as { intake: { id: string } }).intake.id)).toEqual(["w1", "w1"]);
+  });
+
+  it("recusado pelo domínio (quantidade inválida, horário futuro) nem chega ao servidor", async () => {
+    expect(await actions.addWater({ id: "w1", ml: 0 })).toMatchObject({ ok: false, code: "validation", error: "Quantidade de água inválida." });
+    expect(await actions.addWater({ id: "w2", ml: 100, at: Date.now() + 3_600_000 })).toMatchObject({ ok: false, code: "validation", error: "Horário no futuro." });
+    expect(server).not.toHaveBeenCalled();
+    expect(water()).toEqual([]);
+  });
+
+  it("uma falha de água não desfaz uma corrida que ainda está a caminho (e vice-versa)", async () => {
+    const slowRun = deferred<Result<Outcome>>();
+    server.mockReturnValueOnce(slowRun.promise);
+    server.mockResolvedValueOnce(offline());
+
+    const run = actions.addRunningSession({ id: "r1", occurredOn: today() });
+    await vi.waitFor(() => expect(runs().map((r) => r.id)).toContain("r1"));
+    expect(await actions.addWater({ id: "w1", ml: 100 })).toMatchObject({ ok: false });
+    expect(water()).toEqual([]);
+    expect(runs().map((r) => r.id)).toContain("r1");
+
+    slowRun.resolve(ok<Outcome>("saved"));
+    await run;
+  });
+
+  it("o nome de exibição trocado durante a rajada não é desfeito por uma falha", async () => {
+    server.mockRejectedValue(new Error("fetch failed"));
+    queryClient.setQueryData<SnapshotPayload>(SNAPSHOT_KEY, (old) => (old ? { ...old, profile: { displayName: "Ana" } } : old));
+
+    await Promise.all([actions.addWater({ id: "w1", ml: 100 }), actions.addWater({ id: "w2", ml: 100 })]);
+    expect(cached().profile?.displayName).toBe("Ana");
+    expect(water()).toEqual([]);
   });
 });
 

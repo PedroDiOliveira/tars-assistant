@@ -44,7 +44,8 @@ export type GoalKind =
   | "workout_sessions" // sessões concluídas, semanal
   | "study_minutes" // minutos, semanal (geral ou por matéria)
   | "reading_pages" // páginas, semanal
-  | "running_meters"; // metros corridos, semanal (guardado em metros inteiros; a interface fala em km)
+  | "running_meters" // metros corridos, semanal (guardado em metros inteiros; a interface fala em km)
+  | "water_ml"; // ml de água POR DIA, com vigência semanal (a interface fala em litros)
 
 export interface Goal {
   id: string;
@@ -198,4 +199,18 @@ export interface RunningSession {
   /** segundos inteiros e positivos; ausente quando a pessoa não sabe */
   durationSeconds?: number;
   notes?: string;
+}
+
+/* ---------- Água ---------- */
+
+/**
+ * Um toque no contador de água: um registro por vez que a pessoa bebe. O total do dia é derivado (soma dos
+ * registros do dia no fuso do app). Registros são imutáveis: corrigir é remover e adicionar de novo.
+ */
+export interface WaterIntake {
+  id: string;
+  /** instante do toque (epoch ms); o dia é derivado dele no fuso do app, nunca guardado à parte */
+  at: number;
+  /** mililitros inteiros e positivos */
+  ml: number;
 }

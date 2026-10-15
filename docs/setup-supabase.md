@@ -59,6 +59,13 @@ O que acontece se a ordem for trocada ou se for preciso voltar atrás:
 - A migração **não é reversível por um `down`**: remover um valor de enum não é suportado pelo Postgres. As corridas ficam na tabela própria e o resto do app não depende delas.
 - `ALTER TYPE … ADD VALUE` roda dentro da transação da migração; o valor novo só é *usado* depois do commit (as funções o comparam em tempo de execução), por isso nada na migração o referencia como literal.
 
+Outro exemplo, a versão com **Água** (`supabase/migrations/20261014000015_water.sql`), aplicada junto com as anteriores no mesmo `npm run db:push` (a ordem do nome é a ordem de aplicação):
+
+- A migração cria `water_intakes` (RLS, sem `UPDATE`: o registro é imutável), o gatilho de janela de horário, `cmd_water_add` e `cmd_water_remove`, acrescenta `water_ml` ao tipo `goal_kind` e substitui `apply_command` e `get_snapshot` por versões que incluem a água. Não mexe em nenhum dado existente.
+- **App novo antes da migração:** o snapshot não traz `waterIntakes` e o app recusa abrir com "O banco ainda não tem a atualização de Água. Aplique a migração 20261014000015_water e recarregue." (se faltarem as duas, aponta primeiro a mais antiga, a de Corrida).
+- **App antigo com a migração aplicada:** funciona; ele ignora a chave `waterIntakes`. O único risco é um *rollback do app depois de alguém ter definido uma meta de água*, porque o schema antigo do snapshot recusaria o tipo `water_ml`. Antes de voltar atrás, apague essas metas (`delete from public.goals where kind = 'water_ml';`) ou prefira corrigir para frente.
+- As preferências do contador (três quantidades e a escolhida) **não** vão ao banco: ficam no aparelho e não precisam de migração.
+
 Outro exemplo, a versão com o **nome editável** (`supabase/migrations/20261014000014_profile_name.sql`), que se aplica junto com a anterior no mesmo `npm run db:push`:
 
 - A migração só **acrescenta**: a função `set_display_name(text)`, um gatilho que valida o nome e a restrição do `UPDATE` na tabela `profiles` à coluna `display_name` (antes o cliente podia alterar qualquer coluna da própria linha, o que o app nunca precisou). Não mexe em dados: nomes que já existem continuam como estão.

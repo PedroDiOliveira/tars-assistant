@@ -156,5 +156,19 @@ export function createDataActions(host: ActionHost): DataActions {
     },
     updateRunningSession: (id, fields) => send({ type: "running.updateSession", id, fields, nowMs: host.now() }),
     deleteRunningSession: (id) => send({ type: "running.deleteSession", id }),
+
+    /* ---------- água ---------- */
+    // Sem `once()`: cada toque é um registro novo e toques seguidos precisam todos valer.
+    async addWater(input) {
+      const id = input.id ?? host.newId();
+      const nowMs = host.now();
+      const sent = await host.dispatch({
+        type: "water.add",
+        intake: { id, at: input.at ?? nowMs, ml: input.ml },
+        nowMs,
+      });
+      return sent.ok ? ok({ id }) : sent;
+    },
+    removeWater: (id) => send({ type: "water.remove", id }),
   };
 }

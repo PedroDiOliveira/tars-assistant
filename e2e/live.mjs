@@ -184,7 +184,7 @@ try {
     check("Login real tem o link 'Esqueci minha senha'", (await page.getByRole("link", { name: "Esqueci minha senha" }).count()) === 1);
 
     const redirects = [];
-    for (const p of ["/", "/inicio", "/financas", "/treino", "/estudos", "/estudos/leitura", "/configuracoes", "/assistente", "/treino/sessao", "/treino/corrida", "/treino/corrida/historico"]) {
+    for (const p of ["/", "/inicio", "/financas", "/treino", "/estudos", "/estudos/leitura", "/configuracoes", "/assistente", "/treino/sessao", "/treino/corrida", "/treino/corrida/historico", "/agua"]) {
       const r = await ctx.request.get(p, { maxRedirects: 0 });
       redirects.push([p, r.status(), r.headers()["location"] ?? ""]);
     }
@@ -737,6 +737,149 @@ try {
     check("Corrida: a Home mostra Musculação, Corrida, Estudo e Leitura separados, com o progresso em km", ["Musculação", "Corrida", "Estudo", "Leitura"].every((l) => homeRun.includes(l)) && /Corrida.*de 12,5\s*km/.test(homeRun), homeRun.slice(0, 300));
   }
 
+  /* ===== água (modo real: servidor + banco com as migrações reais) ===== */
+  {
+    const sp = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
+    const addDays = (key, n) => {
+      const [y, m, d] = key.split("-").map(Number);
+      return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+    };
+    const weekdayIndex = (key) => {
+      const [y, m, d] = key.split("-").map(Number);
+      return (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
+    };
+    const TODAY = sp.format(Date.now());
+    const WEEK_START = addDays(TODAY, -weekdayIndex(TODAY));
+    const sheetOf = (page) => page.locator('[data-slot="drawer-content"]');
+    const toasts = async (page = pageA) => (await page.locator("[data-sonner-toast]").allInnerTexts()).map(norm).join(" | ");
+    const cardOf = (page = pageA) => page.locator('section[aria-label="Água de hoje"]');
+    const dropOf = (page = pageA) => cardOf(page).getByRole("button", { name: /Adicionar .* de água/ });
+    const cardText = async (page = pageA) => norm(await cardOf(page).innerText());
+    const waterRows = () => dbRows("select id, user_id, ml, (extract(epoch from occurred_at) * 1000)::bigint::text as ms, (occurred_at at time zone 'America/Sao_Paulo')::date::text as day from public.water_intakes order by occurred_at, id");
+
+    await pageA.goto("/inicio");
+    await appReady(pageA);
+    check("Água: conta nova começa vazia, sem registros fictícios, e convida a definir uma meta", /0 L/.test(await cardText()) && /Toque para definir uma meta de água/.test(await cardText()) && (await waterRows()).length === 0, await cardText());
+
+    // meta pelo card: 2,5 L -> 2500 ml POR DIA, vigência na segunda-feira desta semana
+    await cardOf().getByRole("button", { name: "Toque para definir uma meta de água" }).click();
+    await sheetOf(pageA).waitFor();
+    await pageA.waitForTimeout(500);
+    await pageA.fill("#goal-value", "2,5");
+    await sheetOf(pageA).getByRole("button", { name: "Salvar meta", exact: true }).click();
+    await toast(pageA, "Meta atualizada").waitFor({ timeout: 8000 }).catch(() => {});
+    await pageA.waitForTimeout(500);
+    const waterGoals = await dbRows("select user_id, target::int as target, valid_from::text as valid_from from public.goals where kind::text = 'water_ml'");
+    check("Água: meta de 2,5 L grava 2500 ml (não 25) com vigência na segunda-feira desta semana, no usuário certo", waterGoals.length === 1 && waterGoals[0].target === 2500 && waterGoals[0].valid_from === WEEK_START && waterGoals[0].user_id === userA, JSON.stringify(waterGoals));
+
+    // um toque
+    const t0 = Date.now();
+    await dropOf().click();
+    await pageA.waitForTimeout(1500);
+    let rows = await waterRows();
+    check("Água: um toque grava UMA linha do usuário certo, 500 ml, no instante do toque, no dia de hoje (São Paulo)", rows.length === 1 && rows[0].user_id === userA && rows[0].ml === 500 && Math.abs(Number(rows[0].ms) - t0) < 15_000 && rows[0].day === TODAY, JSON.stringify(rows));
+    check("Água: o total aparece e NÃO há aviso de sucesso por toque", /500 ml de 2,5 L/.test(await cardText()) && !/salvo|registrad/i.test(await toasts()), await cardText());
+
+    // três toques em rajada
+    await dropOf().click();
+    await dropOf().click();
+    await dropOf().click();
+    await pageA.waitForTimeout(2500);
+    rows = await waterRows();
+    check("Água: três toques em rajada viram três linhas (as Server Actions saem em série), com ids diferentes", rows.length === 4 && new Set(rows.map((r) => r.id)).size === 4, String(rows.length));
+    check("Água: depois da rajada o total na tela é o do banco (2 L)", /2 L de 2,5 L/.test(await cardText()), await cardText());
+
+    // desfazer remove exatamente o último
+    const lastId = rows[rows.length - 1].id;
+    await cardOf().getByRole("button", { name: /^Desfazer/ }).click();
+    await pageA.waitForTimeout(1500);
+    rows = await waterRows();
+    check("Água: Desfazer remove do banco só o último toque", rows.length === 3 && !rows.some((r) => r.id === lastId), String(rows.length));
+    check("Água: o total volta a 1,5 L", /1,5 L de 2,5 L/.test(await cardText()), await cardText());
+
+    // servidor fora do ar no meio de uma rajada: nada de total otimista, um erro só, nada gravado
+    fake.setRestDown(true);
+    await dropOf().click();
+    await pageA.waitForTimeout(300);
+    await dropOf().click();
+    await pageA.waitForTimeout(300);
+    await dropOf().click();
+    await pageA.waitForTimeout(2800);
+    const downToasts = await toasts();
+    check("Água: servidor cai no meio de uma rajada: erro claro e NUNCA sucesso", /Nada foi salvo|Sem conexão/.test(downToasts), downToasts);
+    check("Água: ...e o aviso de erro não se repete a cada toque (um aviso só para a rajada inteira)", (await pageA.locator("[data-sonner-toast]").count()) === 1, downToasts);
+    check("Água: o total NÃO fica com os toques que não foram salvos (continua 1,5 L)", /1,5 L de 2,5 L/.test(await cardText()), await cardText());
+    check("Água: nada foi gravado durante a queda", (await waterRows()).length === 3);
+    fake.setRestDown(false);
+    await pageA.waitForTimeout(500);
+
+    // resposta perdida: o servidor salvou, o app não soube; a releitura corrige o total
+    fake.dropApplyResponses(1);
+    await dropOf().click();
+    await pageA.waitForTimeout(3500);
+    check("Água: resposta perdida: o servidor JÁ gravou o toque", (await waterRows()).length === 4);
+    check("Água: ...e a tela se reconcilia com o servidor (2 L), sem somar duas vezes", /2 L de 2,5 L/.test(await cardText()), await cardText());
+    fake.dropApplyResponses(0);
+
+    // o relógio do aparelho adiantado não libera um horário futuro: quem decide é o servidor
+    {
+      const ctx = await newContext();
+      const page = await ctx.newPage();
+      watch(page);
+      await login(page, "pedro@tars.example", PASSWORD);
+      await page.waitForURL("**/inicio");
+      await ctx.clock.setFixedTime(Date.now() + 2 * 3_600_000); // o aparelho "acha" que são duas horas depois
+      await page.goto("/inicio");
+      await appReady(page);
+      await dropOf(page).click();
+      await page.waitForTimeout(2500);
+      check("Água: horário futuro é recusado pelo SERVIDOR (o relógio do aparelho não manda)", /Horário no futuro/.test(await toasts(page)) && (await waterRows()).length === 4, await toasts(page));
+      check("Água: ...e o total otimista desaparece da tela", /2 L de 2,5 L/.test(await cardText(page)), await cardText(page));
+      await ctx.close();
+    }
+
+    // tela /agua: registros do banco, remoção, registro avulso de ontem às 23h30
+    await pageA.goto("/agua");
+    await appReady(pageA);
+    check("Água: a tela /agua lista os registros de hoje que vêm do banco", (await pageA.locator("main ul li").filter({ hasText: /\d{2}:\d{2}/ }).count()) === 4);
+    await pageA.locator("main").getByRole("button", { name: /^Remover / }).first().click();
+    await pageA.waitForTimeout(1500);
+    check("Água: remover um registro apaga só essa linha do banco", (await waterRows()).length === 3);
+    await pageA.getByRole("button", { name: /Outra quantidade/ }).click();
+    await sheetOf(pageA).waitFor();
+    await pageA.waitForTimeout(500);
+    await pageA.fill("#water-entry-ml", "300");
+    await sheetOf(pageA).getByRole("button", { name: "Ontem", exact: true }).click();
+    await pageA.fill('input[type="time"]', "23:30");
+    await sheetOf(pageA).getByRole("button", { name: "Registrar", exact: true }).click();
+    await toast(pageA, "300 ml registrados").waitFor({ timeout: 8000 }).catch(() => {});
+    await pageA.waitForTimeout(500);
+    rows = await waterRows();
+    const lateRow = rows.find((r) => r.ml === 300);
+    check("Água: registro de ontem às 23h30 cai em ONTEM no banco (o fuso é o de São Paulo, não o UTC)", Boolean(lateRow) && lateRow.day === addDays(TODAY, -1), JSON.stringify(lateRow));
+    check("Água: a semana mostra o dia de ontem com o que foi registrado", /Semana/.test(await pageA.locator("main").innerText()));
+
+    // exportação inclui a água
+    const exportResponse = await pageA.request.get("/api/export");
+    const exported = await exportResponse.json();
+    check("Água: a exportação (v3) leva os registros de água e a meta", exported.version === 3 && Array.isArray(exported.data.waterIntakes) && exported.data.waterIntakes.length === rows.length && exported.data.goals.some((g) => g.kind === "water_ml" && g.target === 2500), `${exported.version} ${exported.data.waterIntakes?.length}`);
+
+    // recarregar mantém, e o outro usuário não vê nada
+    await pageA.goto("/inicio");
+    await appReady(pageA);
+    check("Água: recarregar mantém o total (vem do banco)", /de 2,5 L/.test(await cardText()) && !/^Água · hoje 0 L/.test(await cardText()), await cardText());
+    {
+      const ctx = await newContext();
+      const page = await ctx.newPage();
+      watch(page);
+      await login(page, "outro@tars.example", "outra-senha-forte-1");
+      await page.waitForURL("**/inicio");
+      await appReady(page);
+      check("Água: outro usuário começa com 0 L e sem meta (nada vaza entre contas)", /0 L/.test(await cardText(page)) && /Toque para definir uma meta de água/.test(await cardText(page)), await cardText(page));
+      await ctx.close();
+    }
+  }
+
   /* ===== assistente (xAI falsa: API compatível com a OpenAI) ===== */
   await pageA.goto("/financas");
   await appReady(pageA);
@@ -875,7 +1018,7 @@ try {
     const disposition = exported.headers()["content-disposition"] ?? "";
     const file = await exported.json();
     check("Exportar: baixa um .json com a data no nome", exported.status() === 200 && /attachment; filename="tars-backup-\d{4}-\d{2}-\d{2}\.json"/.test(disposition), disposition);
-    check("Exportar: formato versionado e dados do usuário A (inclusive categorias arquivadas)", file.app === "tars" && file.version === 2 && Array.isArray(file.data.runningSessions) && file.data.runningSessions.length >= 4 && file.data.runningSessions.every((r) => Number.isInteger(r.distanceMeters)) && file.data.transactions.length >= 3 && file.data.categories.some((c) => c.archived !== true) && file.data.books !== undefined, `${file.data.transactions.length} lançamentos`);
+    check("Exportar: formato versionado e dados do usuário A (inclusive categorias arquivadas)", file.app === "tars" && file.version === 3 && Array.isArray(file.data.waterIntakes) && Array.isArray(file.data.runningSessions) && file.data.runningSessions.length >= 4 && file.data.runningSessions.every((r) => Number.isInteger(r.distanceMeters)) && file.data.transactions.length >= 3 && file.data.categories.some((c) => c.archived !== true) && file.data.books !== undefined, `${file.data.transactions.length} lançamentos`);
     check("Exportar: não vaza e-mail, id de usuário nem sessão", !/pedro@tars|"user_id"|userId|access_token/i.test(JSON.stringify(file)));
     check("Exportar: nunca é cacheável", /no-store/.test(exported.headers()["cache-control"] ?? ""));
     const anon = await (await newContext()).request.get("/api/export");

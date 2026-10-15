@@ -5,6 +5,7 @@ import { futureRunError, normalizeRunFields, RUN_NOT_FOUND } from "./running";
 import type { AppData } from "./snapshot";
 import { finishTimer, pauseTimer, resumeTimer, startTimer } from "./studies";
 import type { WorkoutPlan } from "./types";
+import { waterIntakeError } from "./water";
 
 /** Resultado de aplicar um comando: o novo estado, ou a mensagem de por que não foi possível. */
 export type Applied =
@@ -280,6 +281,19 @@ export function applyCommand(data: AppData, command: Command): Applied {
     }
     case "running.deleteSession":
       return saved({ ...data, runningSessions: removeById(data.runningSessions, command.id) });
+
+    /* ---------- água ---------- */
+    case "water.add": {
+      const { id, at, ml } = command.intake;
+      // Repetir o mesmo id (toque duplo, nova tentativa depois de resposta perdida) é o mesmo registro.
+      if (data.waterIntakes.some((w) => w.id === id)) return saved(data);
+      const error = waterIntakeError({ at, ml }, command.nowMs);
+      if (error) return failed(error);
+      return saved({ ...data, waterIntakes: [...data.waterIntakes, { id, at, ml }] });
+    }
+    // Remover um id que não existe não é erro (desfazer depois de uma releitura): igual ao banco.
+    case "water.remove":
+      return saved({ ...data, waterIntakes: removeById(data.waterIntakes, command.id) });
 
     default: {
       const unreachable: never = command;

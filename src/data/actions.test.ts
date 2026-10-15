@@ -182,6 +182,61 @@ describe("corrida", () => {
   });
 });
 
+describe("água", () => {
+  it("cada toque é um registro NOVO, com id próprio, e leva o relógio do host (instante e nowMs)", async () => {
+    const { host, dispatched } = makeHost();
+    const actions = createDataActions(host);
+    const first = await actions.addWater({ ml: 500 });
+    const second = await actions.addWater({ ml: 500 });
+    expect(first).toEqual(ok({ id: "id-1" }));
+    expect(second).toEqual(ok({ id: "id-2" })); // o mesmo valor duas vezes são DOIS toques: nunca viram um só
+    expect(dispatched).toEqual([
+      { type: "water.add", nowMs: NOW, intake: { id: "id-1", at: NOW, ml: 500 } },
+      { type: "water.add", nowMs: NOW, intake: { id: "id-2", at: NOW, ml: 500 } },
+    ]);
+  });
+
+  it("toques ao mesmo tempo NÃO são travados (não há `once`): todos chegam ao host", async () => {
+    const gate = deferred<Result<Outcome>>();
+    const { host, dispatched, respondWith } = makeHost();
+    respondWith(() => gate.promise);
+    const actions = createDataActions(host);
+    const taps = [actions.addWater({ ml: 100 }), actions.addWater({ ml: 100 }), actions.addWater({ ml: 100 })];
+    await Promise.resolve();
+    expect(dispatched).toHaveLength(3);
+    gate.resolve(ok<Outcome>("saved"));
+    expect((await Promise.all(taps)).map((r) => r.ok)).toEqual([true, true, true]);
+  });
+
+  it("registro avulso: usa o instante informado; o relógio do host vai em nowMs", async () => {
+    const { host, dispatched } = makeHost();
+    await createDataActions(host).addWater({ ml: 250, at: NOW - 3_600_000 });
+    expect(dispatched[0]).toEqual({ type: "water.add", nowMs: NOW, intake: { id: "id-1", at: NOW - 3_600_000, ml: 250 } });
+  });
+
+  it("reenviar o MESMO toque (id informado) depois de uma falha mantém o id: o servidor não duplica", async () => {
+    const { host, dispatched, respondWith } = makeHost();
+    const actions = createDataActions(host);
+    respondWith(async () => fail("Sem conexão com o servidor. Nada foi salvo.", "offline"));
+    expect(await actions.addWater({ id: "tap-1", ml: 500 })).toMatchObject({ ok: false, code: "offline" });
+    respondWith(async () => ok<Outcome>("saved"));
+    expect(await actions.addWater({ id: "tap-1", ml: 500 })).toEqual(ok({ id: "tap-1" }));
+    expect(dispatched.map((c) => (c.type === "water.add" ? c.intake.id : null))).toEqual(["tap-1", "tap-1"]);
+  });
+
+  it("propaga a recusa sem inventar sucesso", async () => {
+    const { host, respondWith } = makeHost();
+    respondWith(async () => fail("Horário no futuro.", "validation"));
+    expect(await createDataActions(host).addWater({ ml: 500, at: NOW + 3_600_000 })).toMatchObject({ ok: false, code: "validation", error: "Horário no futuro." });
+  });
+
+  it("remover manda só o id", async () => {
+    const { host, dispatched } = makeHost();
+    expect(await createDataActions(host).removeWater("w1")).toEqual(ok());
+    expect(dispatched).toEqual([{ type: "water.remove", id: "w1" }]);
+  });
+});
+
 describe("encerrar o treino", () => {
   it("sem rascunho: 'none', sem chamar o servidor", async () => {
     const { host, dispatched } = makeHost();

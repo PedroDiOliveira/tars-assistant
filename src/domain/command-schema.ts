@@ -4,6 +4,7 @@ import type { Command } from "./commands";
 import { GOAL_PERIOD } from "./goals";
 import { MAX_DISTANCE_METERS, MAX_RUN_NOTES, MAX_RUN_SECONDS, MAX_WEEKLY_GOAL_METERS, formatDistance } from "./running";
 import { MAX_SESSION_SECONDS, MIN_TIMER_SECONDS } from "./studies";
+import { INVALID_WATER_ML, MAX_DAILY_GOAL_ML, MAX_WATER_ML, formatLiters } from "./water";
 
 /**
  * Valida um comando que chegou de fora (o navegador) antes de ele tocar o banco. Os limites espelham as
@@ -61,7 +62,7 @@ const template = obj({
 
 const goal = obj({
   id: uuid,
-  kind: z.enum(["savings", "category_budget", "workout_sessions", "study_minutes", "reading_pages", "running_meters"]),
+  kind: z.enum(["savings", "category_budget", "workout_sessions", "study_minutes", "reading_pages", "running_meters", "water_ml"]),
   scopeId: uuid.nullable(),
   validFrom: dateKey,
   target: z.number().int().min(0, { error: "A meta não pode ser negativa." }).max(MAX_CENTS),
@@ -86,6 +87,13 @@ const goal = obj({
       code: "custom",
       path: ["target"],
       message: `A meta semanal de corrida pode ir até ${formatDistance(MAX_WEEKLY_GOAL_METERS)}.`,
+    });
+  }
+  if (g.kind === "water_ml" && g.target > MAX_DAILY_GOAL_ML) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["target"],
+      message: `A meta diária de água pode ir até ${formatLiters(MAX_DAILY_GOAL_ML)}.`,
     });
   }
 });
@@ -179,6 +187,13 @@ const runningFields = obj({
 });
 
 const runningSession = obj({ id: uuid, ...runningFields.shape });
+
+const waterIntake = obj({
+  id: uuid,
+  at: epochMs,
+  // Mililitros inteiros e positivos: mesmo texto do reducer e do banco.
+  ml: z.number({ error: INVALID_WATER_ML }).int({ error: INVALID_WATER_ML }).min(1, { error: INVALID_WATER_ML }).max(MAX_WATER_ML, { error: INVALID_WATER_ML }),
+});
 
 const subjectFields = obj({
   name: name(40, "Matéria"),
@@ -275,6 +290,8 @@ export const commandSchema: z.ZodType<Command> = z.discriminatedUnion("type", [
   obj({ type: z.literal("running.addSession"), session: runningSession, nowMs: epochMs }),
   obj({ type: z.literal("running.updateSession"), id: uuid, fields: runningFields, nowMs: epochMs }),
   obj({ type: z.literal("running.deleteSession"), id: uuid }),
+  obj({ type: z.literal("water.add"), intake: waterIntake, nowMs: epochMs }),
+  obj({ type: z.literal("water.remove"), id: uuid }),
 ]);
 
 /**

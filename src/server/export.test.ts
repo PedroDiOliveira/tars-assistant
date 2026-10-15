@@ -17,16 +17,32 @@ describe("buildExport", () => {
     expect(JSON.parse(JSON.stringify(file, null, 2)).data).toEqual(JSON.parse(JSON.stringify(snapshot.data)));
   });
 
-  it("inclui as corridas (distância em metros; ausente quando não informada) e a versão do formato é 2", () => {
-    expect(EXPORT_VERSION).toBe(2);
+  it("inclui as corridas (distância em metros; ausente quando não informada) e a versão do formato é 3", () => {
+    expect(EXPORT_VERSION).toBe(3);
     const file = buildExport(snapshot, new Date());
     expect(file.data.runningSessions.length).toBeGreaterThanOrEqual(3);
     const parsed = JSON.parse(JSON.stringify(file)) as typeof file;
-    expect(parsed.version).toBe(2);
+    expect(parsed.version).toBe(3);
     expect(parsed.data.runningSessions).toEqual(snapshot.data.runningSessions);
     const withoutDistance = parsed.data.runningSessions.find((r) => r.id === "run3");
     expect(withoutDistance).toEqual({ id: "run3", occurredOn: "2026-10-07", notes: "Esqueci o relógio" });
     expect(withoutDistance).not.toHaveProperty("distanceMeters"); // ausente, nunca 0 nem null
+  });
+
+  it("inclui a água (um registro por toque: instante em ms e ml inteiros) e a meta diária", () => {
+    const withWater: Snapshot = {
+      ...snapshot,
+      data: sampleData({
+        waterIntakes: [
+          { id: "w1", at: 1_760_000_000_000, ml: 500 },
+          { id: "w2", at: 1_760_003_600_000, ml: 1000 },
+        ],
+        goals: [{ id: "g-w", kind: "water_ml", scopeId: null, validFrom: "2026-10-05", target: 2500 }],
+      }),
+    };
+    const parsed = JSON.parse(JSON.stringify(buildExport(withWater, new Date()))) as ReturnType<typeof buildExport>;
+    expect(parsed.data.waterIntakes).toEqual(withWater.data.waterIntakes);
+    expect(parsed.data.goals).toContainEqual({ id: "g-w", kind: "water_ml", scopeId: null, validFrom: "2026-10-05", target: 2500 });
   });
 
   it("inclui os itens arquivados (backup completo)", () => {

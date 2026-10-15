@@ -16,9 +16,10 @@ import { SectionTitle } from "@/components/shared/section-title";
 import { Surface } from "@/components/shared/surface";
 import { SubHeader } from "@/components/layout/sub-header";
 import { activeOnly } from "@/domain/catalog";
-import { goalFor } from "@/domain/goals";
+import { GOAL_PERIOD, goalFor } from "@/domain/goals";
 import { displayInitial } from "@/domain/profile";
 import { formatDistance } from "@/domain/running";
+import { formatLiters } from "@/domain/water";
 import { formatBRL, formatBRLCompact } from "@/domain/money";
 import type { Goal, GoalKind } from "@/domain/types";
 import { signOut, useAccount, useActions, useData, useDraft, useTemplates, useToday } from "@/data";
@@ -65,8 +66,8 @@ function SettingsScreenContent() {
   const weekStartKey = weekStart(today);
 
   function currentGoal(kind: GoalKind, scopeId: string | null): Goal | null {
-    const monthly = kind === "savings" || kind === "category_budget";
-    return goalFor(data.goals, kind, scopeId, monthly ? monthStartKey : weekStartKey);
+    // O período de cada tipo vem de um lugar só (`GOAL_PERIOD`): uma meta nova nunca fica "mensal" por esquecimento aqui.
+    return goalFor(data.goals, kind, scopeId, GOAL_PERIOD[kind] === "month" ? monthStartKey : weekStartKey);
   }
 
   function openGoal(kind: GoalKind, scopeId: string | null, title: string) {
@@ -136,6 +137,7 @@ function SettingsScreenContent() {
             {goalRow("savings", null, "Economia por mês", formatBRLCompact, "Meta de economia mensal")}
             {goalRow("workout_sessions", null, "Treinos de musculação por semana", (t) => `${t}`, "Meta semanal de musculação")}
             {goalRow("running_meters", null, "Corrida por semana (km)", formatDistance, "Meta semanal de corrida")}
+            {goalRow("water_ml", null, "Água por dia", (t) => formatLiters(t), "Meta diária de água")}
             {goalRow("study_minutes", null, "Estudo por semana (geral)", formatMinutes, "Meta semanal de estudo")}
             {goalRow("reading_pages", null, "Leitura por semana", (t) => `${t} págs.`, "Meta semanal de leitura")}
           </Surface>

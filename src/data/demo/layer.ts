@@ -51,6 +51,7 @@ function useData(): DataSnapshot {
       books: s.books,
       readingSessions: s.readingSessions,
       runningSessions: s.runningSessions,
+      waterIntakes: s.waterIntakes,
     })),
   );
 }

@@ -132,7 +132,7 @@ const NEXT_WEEK_START = addDays(WEEK_START, 7);
     const raw = JSON.parse(localStorage.getItem(key));
     return { version: raw.version, counts: { transactions: raw.state.transactions.length, sessions: raw.state.sessions.length, studySessions: raw.state.studySessions.length }, runs: raw.state.runningSessions.length };
   }, STORAGE_KEY);
-  check("Demo antigo: nenhum registro anterior se perdeu, o formato foi para v3 e a corrida nova foi gravada", migrated.version === 3 && JSON.stringify(migrated.counts) === JSON.stringify(oldShape) && migrated.runs === 1, JSON.stringify({ oldShape, migrated }));
+  check("Demo antigo: nenhum registro anterior se perdeu, o formato foi para a versão atual (v4) e a corrida nova foi gravada", migrated.version === 4 && JSON.stringify(migrated.counts) === JSON.stringify(oldShape) && migrated.runs === 1, JSON.stringify({ oldShape, migrated }));
 
   // ---------- 0. estado limpo e previsível: o demo semeia corridas; aqui começamos sem elas e sem meta de corrida ----------
   await open("/treino/corrida");

@@ -10,6 +10,7 @@ import type {
   Subject,
   Transaction,
   TxTemplate,
+  WaterIntake,
   WorkoutPlan,
   WorkoutSession,
 } from "./types";
@@ -70,7 +71,11 @@ export type Command =
   /* corrida: `nowMs` só serve ao reducer para recusar data futura; o banco decide pelo próprio relógio */
   | { type: "running.addSession"; session: RunningSession; nowMs: number }
   | { type: "running.updateSession"; id: string; fields: RunningSessionFields; nowMs: number }
-  | { type: "running.deleteSession"; id: string };
+  | { type: "running.deleteSession"; id: string }
+  /* água: cada toque é um registro com id próprio. `nowMs` só serve ao reducer para recusar horário futuro ou
+     antigo demais; o banco decide pelo próprio relógio. Remover um id que não existe não é erro. */
+  | { type: "water.add"; intake: WaterIntake; nowMs: number }
+  | { type: "water.remove"; id: string };
 
 /**
  * Campos editáveis de um registro. Atualizar SUBSTITUI todos eles (não é um patch parcial): assim "limpar a

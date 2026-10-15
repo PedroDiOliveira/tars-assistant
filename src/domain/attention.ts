@@ -8,12 +8,14 @@ import {
   readingWeekSummary,
   runningWeekSummary,
   studyWeekSummary,
+  waterTodaySummary,
   workoutSummary,
   type DataSnapshot,
 } from "./summary";
+import { formatLiters, formatTotal, isBehindWaterPace } from "./water";
 
 export type AttentionTone = "danger" | "warn" | "info" | "success";
-export type AttentionModule = "finance" | "workout" | "running" | "study" | "reading";
+export type AttentionModule = "finance" | "workout" | "running" | "study" | "reading" | "water";
 
 export interface AttentionItem {
   id: string;
@@ -29,7 +31,7 @@ const TONE_ORDER: Record<AttentionTone, number> = { danger: 0, warn: 1, info: 2,
  * "O que merece atenção nesta semana", só com regras de ritmo e limites.
  * Determinístico, sem IA, e cada frase informa o período a que se refere.
  */
-export function buildAttention(data: DataSnapshot, today: DateKey, max = 4): AttentionItem[] {
+export function buildAttention(data: DataSnapshot, today: DateKey, max = 4, nowMs?: number): AttentionItem[] {
   const items: AttentionItem[] = [];
   const daysLeft = daysLeftInWeek(today);
   const dayLabel = `${daysLeft} ${pluralize(daysLeft, "dia", "dias")}`;
@@ -78,6 +80,21 @@ export function buildAttention(data: DataSnapshot, today: DateKey, max = 4): Att
         module: "running",
         text: `Faltam ${formatDistance(running.remainingMeters)} para sua meta semanal de corrida e ${dayLabel} até domingo.`,
         href: "/treino/corrida",
+      });
+    }
+  }
+
+  // Água: só informa, nunca alarma (tom "info"), entre 14h e 22h e só se `nowMs` foi dado (precisa da hora). Sem push:
+  // o aviso existe dentro do app, onde a pessoa já está olhando.
+  if (nowMs !== undefined) {
+    const water = waterTodaySummary(data, today);
+    if (water.targetMl && isBehindWaterPace(water.ml, water.targetMl, nowMs)) {
+      items.push({
+        id: "water-pace",
+        tone: "info",
+        module: "water",
+        text: `Hoje você bebeu ${formatTotal(water.ml)} de ${formatLiters(water.targetMl)}: faltam ${formatLiters(water.remainingMl)}.`,
+        href: "/agua",
       });
     }
   }

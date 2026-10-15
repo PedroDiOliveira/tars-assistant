@@ -52,4 +52,29 @@ describe("migração do estado do demo (localStorage)", () => {
     const draft: WorkoutDraft = { id: "keep", planId: "p", nameSnapshot: "A", startedAt: 1, exercises: [] };
     expect(migrateDemoState({ ...base, draft }, 2).draft?.id).toBe("keep");
   });
+
+  it("v3 sem água passa a ter uma coleção vazia, sem perder corridas nem nenhum outro registro", () => {
+    const runningSessions = [{ id: "r1", occurredOn: "2026-10-06", distanceMeters: 5200 }];
+    const migrated = migrateDemoState({ ...base, runningSessions }, 3);
+    expect(migrated.waterIntakes).toEqual([]);
+    expect(migrated.runningSessions).toEqual(runningSessions);
+    for (const key of Object.keys(base) as (keyof typeof base)[]) expect(migrated[key as keyof TarsState]).toEqual(base[key]);
+  });
+
+  it("v1 chega à v4: corridas e água vazias", () => {
+    const migrated = migrateDemoState({ ...base }, 1);
+    expect(migrated.runningSessions).toEqual([]);
+    expect(migrated.waterIntakes).toEqual([]);
+  });
+
+  it("não apaga a água de um estado que já a tem (nem a reescreve)", () => {
+    const waterIntakes = [{ id: "w1", at: 1_760_000_000_000, ml: 500 }, { id: "w2", at: 1_760_000_100_000, ml: 100 }];
+    expect(migrateDemoState({ ...base, runningSessions: [], waterIntakes }, 4).waterIntakes).toEqual(waterIntakes);
+    expect(migrateDemoState({ ...base, runningSessions: [], waterIntakes }, 3).waterIntakes).toEqual(waterIntakes);
+  });
+
+  it("um valor inesperado no lugar da coleção de água vira lista vazia, em vez de quebrar a tela", () => {
+    expect(migrateDemoState({ ...base, runningSessions: [], waterIntakes: null }, 4).waterIntakes).toEqual([]);
+    expect(migrateDemoState({ ...base, runningSessions: [], waterIntakes: "x" }, 4).waterIntakes).toEqual([]);
+  });
 });

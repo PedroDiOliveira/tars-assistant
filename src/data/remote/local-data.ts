@@ -1,12 +1,15 @@
 import { AI_CONSENT_KEY, notifyAiConsentChanged } from "../consent";
+import { wipeWaterPrefs, WATER_PREFS_KEY } from "../water-prefs";
 import { DRAFT_STORAGE_KEY, wipeDraft } from "./draft-store";
 
 /**
- * Apaga TUDO o que o app guarda neste aparelho sobre o usuário (spec §13): treino em andamento e consentimento da IA.
+ * Apaga TUDO o que o app guarda neste aparelho sobre o usuário (spec §13): treino em andamento, consentimento da IA
+ * e as preferências do contador de água.
  * O cache de dados fica em memória e morre com a página; nada do Supabase é guardado em localStorage.
  */
 export function wipeLocalUserData(): void {
   wipeDraft();
+  wipeWaterPrefs();
   try {
     localStorage.removeItem(AI_CONSENT_KEY);
   } catch {
@@ -15,4 +18,4 @@ export function wipeLocalUserData(): void {
   notifyAiConsentChanged();
 }
 
-export { AI_CONSENT_KEY, DRAFT_STORAGE_KEY };
+export { AI_CONSENT_KEY, DRAFT_STORAGE_KEY, WATER_PREFS_KEY };

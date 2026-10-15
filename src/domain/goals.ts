@@ -9,6 +9,8 @@ export const GOAL_PERIOD: Record<GoalKind, "month" | "week"> = {
   study_minutes: "week",
   reading_pages: "week",
   running_meters: "week",
+  // meta DIÁRIA em ml, mas com vigência semanal: o `target` vale para cada dia da semana (ver `waterGoalFor`)
+  water_ml: "week",
 };
 
 /**

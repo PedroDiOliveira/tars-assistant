@@ -35,9 +35,19 @@ export async function executeCommand(client: RpcClient, raw: unknown): Promise<R
   return ok(outcome);
 }
 
-/** Um snapshot de antes da corrida: tem o resto (relógio do servidor, categorias...), mas não `runningSessions`. */
-function isSnapshotWithoutRunning(data: unknown): boolean {
-  return typeof data === "object" && data !== null && "serverNow" in data && "categories" in data && !("runningSessions" in data);
+/**
+ * A chave que cada migração acrescentou ao snapshot, da mais antiga para a mais nova. Um snapshot que tem o resto
+ * (relógio do servidor, categorias...) mas não uma dessas chaves é de um banco em que a migração ainda não rodou.
+ */
+const SNAPSHOT_MIGRATIONS = [
+  { key: "runningSessions", label: "Corrida", migration: "20261014000013_running" },
+  { key: "waterIntakes", label: "Água", migration: "20261014000015_water" },
+] as const;
+
+/** A migração mais antiga ainda não aplicada, ou null se o snapshot não é "o de antes de uma migração". */
+function missingMigration(data: unknown): (typeof SNAPSHOT_MIGRATIONS)[number] | null {
+  if (typeof data !== "object" || data === null || !("serverNow" in data) || !("categories" in data)) return null;
+  return SNAPSHOT_MIGRATIONS.find((m) => !(m.key in data)) ?? null;
 }
 
 /** Lê o snapshot completo do usuário (uma ida ao banco) e valida o formato. */
@@ -47,9 +57,10 @@ export async function loadSnapshot(client: RpcClient): Promise<Result<Snapshot>>
   try {
     return ok(parseSnapshot(data));
   } catch {
-    // O app novo foi publicado antes da migração de Corrida: diz o que fazer, em vez de um "formato inesperado" genérico.
-    if (isSnapshotWithoutRunning(data)) {
-      return fail("O banco ainda não tem a atualização de Corrida. Aplique a migração 20261014000013_running e recarregue.", "unknown");
+    // O app novo foi publicado antes de uma migração: diz o que fazer, em vez de um "formato inesperado" genérico.
+    const missing = missingMigration(data);
+    if (missing) {
+      return fail(`O banco ainda não tem a atualização de ${missing.label}. Aplique a migração ${missing.migration} e recarregue.`, "unknown");
     }
     // O banco devolveu algo que o domínio não entende: erro explícito, nunca dado pela metade.
     return fail("Não foi possível ler seus dados (formato inesperado).", "unknown");

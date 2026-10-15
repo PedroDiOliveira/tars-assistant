@@ -36,6 +36,48 @@ const hourFormatter = new Intl.DateTimeFormat("en-US", {
   hourCycle: "h23",
 });
 
+const clockFormatter = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: TIMEZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+/** "14:32": hora e minuto de um instante no fuso do app (nunca o do aparelho). */
+export function clockFromInstant(ms: number): string {
+  return clockFormatter.format(ms);
+}
+
+const localPartsFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+/**
+ * O instante em que o relógio de São Paulo marca `day` às `hour`:`minute`; o inverso de `dateKeyFromInstant` +
+ * `clockFromInstant`. Não supõe um deslocamento fixo: parte de UTC e corrige pela diferença que o fuso mostra
+ * (duas passadas bastam, mesmo se o fuso tivesse horário de verão). Devolve null para dia ou horário inválidos.
+ */
+export function instantFromLocal(day: DateKey, hour: number, minute: number): number | null {
+  if (!isValidDateKey(day) || !Number.isInteger(hour) || !Number.isInteger(minute)) return null;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  const [y, m, d] = day.split("-").map(Number);
+  const wanted = Date.UTC(y, m - 1, d, hour, minute);
+  let instant = wanted;
+  for (let pass = 0; pass < 2; pass += 1) {
+    const parts = localPartsFormatter.formatToParts(instant);
+    const get = (type: string) => Number(parts.find((p) => p.type === type)!.value);
+    const shown = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
+    instant -= shown - wanted;
+  }
+  return instant;
+}
+
 /** Hora (0-23) no fuso do app, para saudação e horários. */
 export function hourFromInstant(ms: number): number {
   return Number(hourFormatter.format(ms));

@@ -44,14 +44,15 @@ function pickAppData(s: TarsState): AppData {
     books: s.books,
     readingSessions: s.readingSessions,
     runningSessions: s.runningSessions,
+    waterIntakes: s.waterIntakes,
   };
 }
 
 export const useTarsStore = create<TarsState>()(
   persist(() => EMPTY, {
     name: DEMO_STORAGE_KEY,
-    // v3: corridas. Ver `migrateDemoState` para o histórico de versões.
-    version: 3,
+    // v4: água. Ver `migrateDemoState` para o histórico de versões.
+    version: 4,
     migrate: migrateDemoState,
     storage: createJSONStorage(() => localStorage),
     // O Next renderiza no servidor: a reidratação é disparada manualmente no cliente.

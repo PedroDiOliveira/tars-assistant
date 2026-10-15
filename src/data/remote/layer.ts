@@ -18,6 +18,7 @@ import { isDraftHydrated, subscribeDraftHydrated, useDraftStore } from "./draft-
 import { remoteAssistant } from "./assistant-client";
 import { wipeLocalUserData } from "./local-data";
 import type { SnapshotPayload } from "./payload";
+import { discardEntry, startBurst, type Burst } from "./optimistic";
 import { fetchSnapshot, goToLogin, queryClient, SNAPSHOT_KEY } from "./query";
 
 const snapshotQuery = { queryKey: SNAPSHOT_KEY, queryFn: fetchSnapshot } as const;
@@ -27,6 +28,9 @@ const snapshotQuery = { queryKey: SNAPSHOT_KEY, queryFn: fetchSnapshot } as cons
 /** Comandos ainda esperando o servidor. Só reconciliamos com o servidor quando não há nenhum, para uma leitura
  *  antiga não desfazer na tela uma ação que ainda está a caminho. */
 let inflight = 0;
+
+/** O que está a caminho, sobre o estado que o servidor já conhecia (ver `optimistic.ts`). Existe só enquanto `inflight > 0`. */
+let burst: Burst | null = null;
 
 function cachedPayload(): SnapshotPayload | undefined {
   return queryClient.getQueryData<SnapshotPayload>(SNAPSHOT_KEY);
@@ -39,6 +43,11 @@ async function dispatch(command: Command): Promise<Result<Outcome>> {
   // O domínio decide primeiro: a mesma regra (e a mesma mensagem) que o banco aplicaria, sem ida à rede.
   const applied = applyCommand(before.data, command);
   if (!applied.ok) return fail(applied.error, "validation");
+
+  // O primeiro comando de uma rajada fixa o estado que o servidor já conhece; os seguintes se somam a ele.
+  const mine = inflight === 0 || burst === null ? (burst = startBurst(before.data)) : burst;
+  const entry = { command };
+  mine.entries.push(entry);
 
   inflight += 1;
   try {
@@ -57,17 +66,22 @@ async function dispatch(command: Command): Promise<Result<Outcome>> {
       result = fail("Sem conexão com o servidor. Nada foi salvo.", "offline");
     }
     if (!result.ok) {
-      // Nada foi salvo, e o total otimista na tela é mentira. A releitura do `finally` o corrige, mas ela falha
-      // justamente quando o servidor está fora do ar: sem isto, o cache guardaria o efeito otimista até a
-      // próxima leitura bem-sucedida. Desfaz já, só se este for o único comando em andamento (não desfaz o de outro).
-      if (inflight === 1) queryClient.setQueryData<SnapshotPayload>(SNAPSHOT_KEY, before);
+      // Nada foi salvo, e o efeito otimista na tela é mentira. A releitura do `finally` o corrige, mas ela falha
+      // justamente quando o servidor está fora do ar: sem isto, o cache guardaria o efeito até a próxima leitura
+      // bem-sucedida. Refaz a tela sem ESTE comando e com os demais da rajada (os que já foram salvos e os que
+      // ainda estão a caminho), então toques seguidos que falham saem todos, e só eles.
+      const data = discardEntry(mine, entry);
+      queryClient.setQueryData<SnapshotPayload>(SNAPSHOT_KEY, (old) => (old ? { ...old, data } : old));
       if (result.code === "unauthorized") goToLogin();
     }
     return result;
   } finally {
     inflight -= 1;
-    // Sucesso: o servidor é a verdade (relógio do cronômetro, desfecho). Falha: isto desfaz o efeito otimista.
-    if (inflight === 0) void queryClient.invalidateQueries({ queryKey: SNAPSHOT_KEY });
+    if (inflight === 0) {
+      burst = null;
+      // Sucesso: o servidor é a verdade (relógio do cronômetro, desfecho). Falha: confirma o que a tela já mostra.
+      void queryClient.invalidateQueries({ queryKey: SNAPSHOT_KEY });
+    }
   }
 }
 
@@ -118,6 +132,7 @@ function selectData({ data }: SnapshotPayload): DataSnapshot {
     books: data.books,
     readingSessions: data.readingSessions,
     runningSessions: data.runningSessions,
+    waterIntakes: data.waterIntakes,
   };
 }
 

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { runningWeekSummary } from "@/domain/summary";
 import { EMPTY_APP_DATA } from "@/domain/snapshot";
 import { goalFor } from "@/domain/goals";
-import { weekStart } from "@/lib/dates";
+import { dateKeyFromInstant, weekStart } from "@/lib/dates";
+import { waterDayTotals, waterGoalFor } from "@/domain/water";
+import { waterTodaySummary } from "@/domain/summary";
 import { buildSeed } from "./seed";
 
 describe("dados fictícios de corrida", () => {
@@ -45,3 +47,47 @@ describe("dados fictícios de corrida", () => {
     expect(a.transactions.length).toBeGreaterThan(0);
   });
 });
+
+describe("dados fictícios de água", () => {
+  const days = ["2026-10-05", "2026-10-07", "2026-10-09", "2026-10-11", "2026-10-12", "2026-12-31"];
+
+  it.each(days)("em %s: só dias passados (hoje começa vazio), ontem sempre tem registro e cada dia cai no dia certo", (today) => {
+    const seed = buildSeed(today);
+    expect(seed.waterIntakes.length).toBeGreaterThan(100);
+    // hoje vazio para o contador poder ser experimentado, e nada no futuro de quem abre o demo de manhã cedo
+    expect(seed.waterIntakes.every((w) => dateKeyFromInstant(w.at) < today)).toBe(true);
+    const totals = waterDayTotals(seed.waterIntakes);
+    const yesterday = new Date(Date.parse(`${today}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+    expect(totals.get(yesterday)?.ml ?? 0).toBeGreaterThan(0);
+    expect(new Set(seed.waterIntakes.map((w) => w.id)).size).toBe(seed.waterIntakes.length);
+    for (const w of seed.waterIntakes) expect(Number.isInteger(w.ml) && w.ml > 0 && w.ml <= 5000 && Number.isInteger(w.at)).toBe(true);
+  });
+
+  it("tem meta de 2,5 L por dia com vigência semanal, e o demo mostra dias na meta e fora dela", () => {
+    const today = "2026-10-09";
+    const seed = buildSeed(today);
+    expect(waterGoalFor(seed.goals, today)).toBe(2_500);
+    const goals = seed.goals.filter((g) => g.kind === "water_ml");
+    expect(goals).toHaveLength(1);
+    expect(weekStart(goals[0].validFrom)).toBe(goals[0].validFrom);
+
+    const totals = waterDayTotals(seed.waterIntakes);
+    const met = [...totals.values()].filter((t) => t.ml >= 2_500).length;
+    expect(met).toBeGreaterThan(5);
+    expect(met).toBeLessThan(totals.size);
+  });
+
+  it("o resumo de hoje funciona sobre o demo (contador zerado, meta e semana preenchidas)", () => {
+    const today = "2026-10-09";
+    const summary = waterTodaySummary({ ...EMPTY_APP_DATA, ...buildSeed(today) }, today);
+    expect(summary).toMatchObject({ ml: 0, count: 0, targetMl: 2_500, met: false });
+    expect(summary.week).toHaveLength(7);
+  });
+
+  it("os ids seguem o padrão do restante (a água é gerada por último, sem tocar nos ids anteriores)", () => {
+    const seed = buildSeed("2026-10-09");
+    expect(seed.runningSessions[0].id).toMatch(/^run-\d+$/);
+    expect(seed.waterIntakes[0].id).toMatch(/^wat-\d+$/);
+  });
+});
+

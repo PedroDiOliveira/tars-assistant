@@ -23,6 +23,7 @@ import { Surface } from "@/components/shared/surface";
 import { TransactionSheet, type TxSheetState } from "@/components/finance/transaction-sheet";
 import { ReadingSessionSheet } from "@/components/reading/reading-session-sheet";
 import { StudyStartSheet } from "@/components/studies/study-start-sheet";
+import { WaterCard } from "@/components/water/water-card";
 import { buildAttention, type AttentionItem, type AttentionTone } from "@/domain/attention";
 import { formatBRL, formatBRLCompact } from "@/domain/money";
 import { runningWeekText } from "@/domain/running-text";
@@ -74,8 +75,10 @@ function HomeScreenContent() {
   const runningText = useMemo(() => runningWeekText(running), [running]);
   const study = useMemo(() => studyWeekSummary(data, today), [data, today]);
   const reading = useMemo(() => readingWeekSummary(data, today), [data, today]);
-  // Só o essencial: no máximo dois avisos na abertura.
-  const attention = useMemo(() => buildAttention(data, today, 2), [data, today]);
+  // Só o essencial: no máximo dois avisos na abertura. O aviso de ritmo da água precisa da hora; em blocos de 10 min,
+  // para a lista não ser refeita a cada tique do relógio.
+  const clock = Math.floor(now / 600_000) * 600_000;
+  const attention = useMemo(() => buildAttention(data, today, 2, clock), [data, today, clock]);
 
   const negative = finance.resultCents < 0;
   const savingsMet = finance.savingsTarget !== null && finance.resultCents >= finance.savingsTarget;
@@ -156,6 +159,9 @@ function HomeScreenContent() {
         </Link>
       ) : null}
       {timer ? <TimerBanner /> : null}
+
+      {/* Água de hoje: contador de um toque (a Início é o ponto de entrada do hábito mais frequente) */}
+      <WaterCard />
 
       {/* Metas da semana */}
       <section className="space-y-2">

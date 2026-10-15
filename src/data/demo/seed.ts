@@ -20,6 +20,7 @@ import type {
   Subject,
   Transaction,
   TxTemplate,
+  WaterIntake,
   WorkoutPlan,
   WorkoutSession,
 } from "@/domain/types";
@@ -38,6 +39,7 @@ export interface SeedData {
   books: Book[];
   readingSessions: ReadingSession[];
   runningSessions: RunningSession[];
+  waterIntakes: WaterIntake[];
 }
 
 /* Catálogos iniciais em PT-BR (editáveis no app real). */
@@ -260,6 +262,8 @@ export function buildSeed(today: DateKey): SeedData {
     // Corrida: 15 km por semana até a semana -3; 20 km depois (a meta antiga continua valendo para as semanas passadas).
     { id: "g-running-1", kind: "running_meters", scopeId: null, validFrom: addDays(weekNow, -7 * 6), target: 15_000 },
     { id: "g-running-2", kind: "running_meters", scopeId: null, validFrom: addDays(weekNow, -21), target: 20_000 },
+    // Água: 2,5 L por dia (o alvo é por DIA; a vigência é semanal).
+    { id: "g-water", kind: "water_ml", scopeId: null, validFrom: weekFrom, target: 2_500 },
   ];
 
   /* ---------- Treino ---------- */
@@ -395,6 +399,28 @@ export function buildSeed(today: DateKey): SeedData {
   }
   addRun(2, { notes: "Corrida leve, fiquei sem o relógio" });
 
+  /* ---------- Água ---------- */
+  // Sem sorteio, como a corrida. Só dias PASSADOS: hoje começa vazio para o contador poder ser experimentado, e
+  // nenhum registro fica no futuro de quem abre o demo de manhã cedo. O fuso do app não tem horário de verão
+  // (UTC-3), então o instante de "dia + hora" é fixo.
+  const waterIntakes: WaterIntake[] = [];
+  const waterAt = (day: DateKey, hour: number, minute: number) => Date.parse(`${day}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00-03:00`);
+  // Um dia cheio (3,1 L): garrafa, garrafa, garrafa grande, garrafa, copo, garrafa. Dias piores perdem o fim do dia.
+  const waterDay: [number, number, number][] = [
+    [7, 40, 500],
+    [10, 20, 500],
+    [13, 10, 1000],
+    [16, 0, 500],
+    [18, 30, 100],
+    [20, 15, 500],
+  ];
+  for (let back = 1; back <= 35; back += 1) {
+    const day = addDays(today, -back);
+    for (const [hour, minute, ml] of waterDay.slice(0, waterDay.length - (back % 5))) {
+      waterIntakes.push({ id: id("wat"), at: waterAt(day, hour, minute), ml });
+    }
+  }
+
   return {
     categories: CATEGORIES,
     transactions,
@@ -408,5 +434,6 @@ export function buildSeed(today: DateKey): SeedData {
     books,
     readingSessions,
     runningSessions,
+    waterIntakes,
   };
 }

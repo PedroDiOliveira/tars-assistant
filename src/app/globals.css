@@ -42,10 +42,12 @@
   --color-danger-soft: var(--danger-soft);
   --color-danger-ink: var(--danger-ink);
 
-  /* cor do módulo corrente: data-module="finance|workout|running|study|reading" num ancestral */
+  /* cor do módulo corrente: data-module="finance|workout|running|study|reading|water" num ancestral */
   --color-m: var(--m);
   --color-m-soft: var(--m-soft);
   --color-m-ink: var(--m-ink);
+  /* texto sobre a cor cheia do módulo de água (a gota): claro no tema claro, escuro no escuro */
+  --color-water-on: var(--water-on);
 
   --radius-sm: calc(var(--radius) * 0.5);
   --radius-md: calc(var(--radius) * 0.75);
@@ -113,6 +115,12 @@
   --reading: #4f8d5b;
   --reading-soft: #deecdf;
   --reading-ink: #2d5b37;
+  /* Água: o azul-água no LIMITE da família (matiz 185, o teto de src/lib/hues.ts), mais frio que o teal do Estudo
+     (matiz 171). `--water-on` é a cor do texto sobre `--water` cheio (a gota do contador). */
+  --water: #0a7e89;
+  --water-soft: #d4eef0;
+  --water-ink: #075860;
+  --water-on: #ffffff;
 }
 
 .dark {
@@ -157,6 +165,10 @@
   --reading: #8dd49a;
   --reading-soft: #152c1b;
   --reading-ink: #abe3b4;
+  --water: #4fd0dc;
+  --water-soft: #0c2d30;
+  --water-ink: #8ae6ee;
+  --water-on: #06262a;
 }
 
 /* Seleciona a cor do módulo para todos os filhos (bg-m, text-m-ink, stroke-m...). */
@@ -181,6 +193,11 @@
   --m: var(--reading);
   --m-soft: var(--reading-soft);
   --m-ink: var(--reading-ink);
+}
+[data-module="water"] {
+  --m: var(--water);
+  --m-soft: var(--water-soft);
+  --m-ink: var(--water-ink);
 }
 [data-module="primary"] {
   --m: var(--primary);
@@ -238,4 +255,27 @@ html[data-keyboard] {
 [data-slot="drawer-content"].sheet-content[data-vaul-drawer-direction="bottom"] {
   bottom: var(--kb-inset);
   max-height: min(92dvh, calc(var(--vv-height, 100dvh) - env(safe-area-inset-top, 0px) - 0.5rem));
+}
+
+/* Água: o anel que sobe da gota a cada toque. Com "reduzir movimento" ligado, nada anima. */
+@keyframes water-ripple {
+  from {
+    transform: scale(0.8);
+    opacity: 0.4;
+  }
+  to {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+.water-ripple {
+  border-radius: 9999px;
+  background: currentColor;
+  animation: water-ripple 600ms ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .water-ripple {
+    animation: none;
+    opacity: 0;
+  }
 }

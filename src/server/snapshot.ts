@@ -52,7 +52,7 @@ const template = z.object({
 
 const goal = z.object({
   id,
-  kind: z.enum(["savings", "category_budget", "workout_sessions", "study_minutes", "reading_pages", "running_meters"]),
+  kind: z.enum(["savings", "category_budget", "workout_sessions", "study_minutes", "reading_pages", "running_meters", "water_ml"]),
   scopeId: id.nullable(),
   validFrom: dateKey,
   target: z.number().int(),
@@ -161,6 +161,13 @@ const runningSession = z
   })
   .transform(clean);
 
+const waterIntake = z.object({
+  id,
+  // Instante do toque em ms (epoch), como os demais instantes do snapshot.
+  at: z.number().int(),
+  ml: z.number().int(),
+});
+
 const snapshotSchema = z.object({
   serverNow: z.number(),
   profile: z.object({ displayName: z.string() }).nullable(),
@@ -177,6 +184,7 @@ const snapshotSchema = z.object({
   books: z.array(book),
   readingSessions: z.array(readingSession),
   runningSessions: z.array(runningSession),
+  waterIntakes: z.array(waterIntake),
 });
 
 export interface Snapshot {

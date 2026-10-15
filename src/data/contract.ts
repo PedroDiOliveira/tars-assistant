@@ -79,6 +79,18 @@ export type NewRunningSession = Omit<RunningSession, "id"> & {
   id?: string;
 };
 
+export interface NewWaterIntake {
+  /** mililitros inteiros (1 a 5000) */
+  ml: number;
+  /** instante do toque (epoch ms); sem ele vale "agora" */
+  at?: number;
+  /**
+   * Id do registro. Cada toque é um registro NOVO e ganha um id próprio; só se repete um `id` ao reenviar o MESMO
+   * toque (aí o servidor responde "salvo" sem duplicar).
+   */
+  id?: string;
+}
+
 export interface GoalInput {
   kind: GoalKind;
   scopeId: string | null;
@@ -144,6 +156,11 @@ export interface DataActions {
   /** Substitui os campos editáveis: distância, duração ou observação omitidas voltam a "não informado". */
   updateRunningSession(id: string, fields: RunningSessionFields): Promise<Result>;
   deleteRunningSession(id: string): Promise<Result>;
+  /* água */
+  /** Um toque no contador. Devolve o id do registro (é ele que o "Desfazer" remove). */
+  addWater(input: NewWaterIntake): Promise<Result<{ id: string }>>;
+  /** Remover um registro que não existe (mais) não é erro. */
+  removeWater(id: string): Promise<Result>;
 }
 
 /**

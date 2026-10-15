@@ -7,15 +7,17 @@ import type { Snapshot } from "./snapshot";
  *  1: lançamentos, metas, treinos, estudos, leituras e catálogos.
  *  2: + `data.runningSessions` (corridas; distância em metros e duração em segundos, ausentes quando não informadas)
  *     e a meta `running_meters` (metros) em `data.goals`. Um arquivo v1 é um v2 sem corridas.
+ *  3: + `data.waterIntakes` (um registro por toque: `at` em ms desde 1970 e `ml` inteiros) e a meta `water_ml`
+ *     (ml POR DIA, com vigência semanal) em `data.goals`. Um arquivo v2 é um v3 sem água.
  */
-export const EXPORT_VERSION = 2;
+export const EXPORT_VERSION = 3;
 
 export interface ExportFile {
   app: "tars";
   version: typeof EXPORT_VERSION;
   exportedAt: string;
   profile: { displayName: string } | null;
-  /** Tudo o que o app guarda do usuário: lançamentos, metas, treinos, corridas, estudos, leituras e catálogos (inclusive os arquivados). */
+  /** Tudo o que o app guarda do usuário: lançamentos, metas, treinos, corridas, água, estudos, leituras e catálogos (inclusive os arquivados). */
   data: AppData;
 }
 

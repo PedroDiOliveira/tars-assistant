@@ -6,7 +6,7 @@ const empty = {
   serverNow: 1_760_000_000_000,
   profile: { displayName: "Pedro" },
   categories: [], transactions: [], templates: [], goals: [], exercises: [], plans: [], sessions: [],
-  subjects: [], studySessions: [], timer: null, books: [], readingSessions: [], runningSessions: [],
+  subjects: [], studySessions: [], timer: null, books: [], readingSessions: [], runningSessions: [], waterIntakes: [],
 };
 
 describe("parseSnapshot: corridas", () => {

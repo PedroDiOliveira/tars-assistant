@@ -193,6 +193,10 @@ try {
       },
     },
     { name: "Meta de corrida", url: "/configuracoes", open: () => page.getByRole("button", { name: /Corrida por semana/ }).click() },
+    // Água: as três folhas com campo de texto (quantidades do contador, registro avulso e a meta diária em litros).
+    { name: "Quantidades da água", url: "/agua", open: () => page.getByRole("button", { name: "Editar quantidades" }).click() },
+    { name: "Outra quantidade de água", url: "/agua", open: () => page.getByRole("button", { name: /Outra quantidade/ }).click() },
+    { name: "Meta de água", url: "/configuracoes", open: () => page.getByRole("button", { name: /Água por dia/ }).click() },
     { name: "Nova categoria", url: "/configuracoes/catalogos", open: () => page.getByRole("button", { name: "Despesa" }).first().click() },
     { name: "Estudo manual", url: "/estudos", open: () => page.getByRole("button", { name: "Manual" }).click() },
   ];
