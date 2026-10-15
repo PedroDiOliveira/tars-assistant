@@ -55,7 +55,7 @@ describe("formatLiters", () => {
     expect(formatTotal(1500)).toBe("1,5 L");
   });
 
-  it("número e unidade separados (a gota mostra '+500' grande e 'ml' pequeno)", () => {
+  it("número e unidade separados ('500' e 'ml', '1,5' e 'L')", () => {
     expect(formatWaterParts(100)).toEqual({ value: "100", unit: "ml" });
     expect(formatWaterParts(500)).toEqual({ value: "500", unit: "ml" });
     expect(formatWaterParts(999)).toEqual({ value: "999", unit: "ml" });

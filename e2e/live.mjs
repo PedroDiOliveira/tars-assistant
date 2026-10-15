@@ -755,10 +755,17 @@ try {
     const cardOf = (page = pageA) => page.locator('section[aria-label="Água de hoje"]');
     const dropOf = (page = pageA) => cardOf(page).getByRole("button", { name: /Adicionar .* de água/ });
     const cardText = async (page = pageA) => norm(await cardOf(page).innerText());
+    /** O card nasce recolhido numa faixa a cada visita à Início: abre se ainda estiver assim. */
+    const expandCard = async (page = pageA) => {
+      const strip = cardOf(page).getByRole("button", { name: /Água · hoje/, expanded: false });
+      if (await strip.count()) await strip.click();
+      await cardOf(page).getByRole("button", { name: "Recolher água de hoje" }).waitFor();
+    };
     const waterRows = () => dbRows("select id, user_id, ml, (extract(epoch from occurred_at) * 1000)::bigint::text as ms, (occurred_at at time zone 'America/Sao_Paulo')::date::text as day from public.water_intakes order by occurred_at, id");
 
     await pageA.goto("/inicio");
     await appReady(pageA);
+    await expandCard();
     check("Água: conta nova começa vazia, sem registros fictícios, e convida a definir uma meta", /0 L/.test(await cardText()) && /Toque para definir uma meta de água/.test(await cardText()) && (await waterRows()).length === 0, await cardText());
 
     // meta pelo card: 2,5 L -> 2500 ml POR DIA, vigência na segunda-feira desta semana
@@ -831,6 +838,7 @@ try {
       await ctx.clock.setFixedTime(Date.now() + 2 * 3_600_000); // o aparelho "acha" que são duas horas depois
       await page.goto("/inicio");
       await appReady(page);
+      await expandCard(page);
       await dropOf(page).click();
       await page.waitForTimeout(2500);
       check("Água: horário futuro é recusado pelo SERVIDOR (o relógio do aparelho não manda)", /Horário no futuro/.test(await toasts(page)) && (await waterRows()).length === 4, await toasts(page));

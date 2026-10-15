@@ -20,7 +20,7 @@ export function WaterPortionsSheet({ open, onOpenChange }: WaterPortionsSheetPro
       open={open}
       onOpenChange={onOpenChange}
       title="Quantidades do contador"
-      description="Quanto cada um soma quando você toca na gota. Vale só neste aparelho."
+      description="Quanto cada um soma quando você toca em +. Vale só neste aparelho."
       module="water"
     >
       {open ? <PortionsForm onDone={() => onOpenChange(false)} /> : null}

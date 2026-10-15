@@ -19,7 +19,7 @@ export type PortionIndex = 0 | 1 | 2;
 export interface WaterPrefs {
   /** copo, garrafa e garrafa grande, em ml, em ordem crescente */
   portions: WaterPortions;
-  /** qual das três o toque na gota soma */
+  /** qual das três o toque no "+" soma */
   selected: PortionIndex;
 }
 

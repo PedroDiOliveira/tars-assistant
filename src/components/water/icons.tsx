@@ -63,19 +63,6 @@ export function LargeBottleIcon(props: IconProps) {
   );
 }
 
-/** Gota cheia: o botão do contador. Preenche com a cor do texto; um brilho discreto dá volume. */
-export function DropShape(props: IconProps) {
-  return (
-    <svg viewBox="0 0 64 76" aria-hidden focusable="false" {...props}>
-      <path
-        d="M32 3C21.4 17.4 8 29.6 8 46.6 8 61.7 18.8 73 32 73s24-11.3 24-26.4C56 29.6 42.6 17.4 32 3Z"
-        fill="currentColor"
-      />
-      <path d="M20.4 32.5c1-4 3.2-7 6.2-9.6" fill="none" stroke="#fff" strokeOpacity={0.4} strokeWidth={3} strokeLinecap="round" />
-    </svg>
-  );
-}
-
 /** Copo/garrafa/garrafa grande, na ordem dos três botões do seletor. */
 export const PORTION_ICONS = [GlassIcon, BottleIcon, LargeBottleIcon] as const;
 

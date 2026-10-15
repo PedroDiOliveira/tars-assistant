@@ -1,6 +1,6 @@
 /**
- * Água no modo DEMO, ponta a ponta, num celular (375 px): o card da Início (contador de um toque, três porções,
- * desfazer, meta), as quantidades editáveis, a meta diária em litros, a tela /agua (registros, remoção com desfazer,
+ * Água no modo DEMO, ponta a ponta, num celular (375 px): o card da Início (nasce numa faixa recolhida; aberto tem o
+ * botão +, três porções, desfazer, meta), as quantidades editáveis, a meta diária em litros, a tela /agua (registros, remoção com desfazer,
  * registro avulso de hoje e de ontem, semana) e a virada da meia-noite no fuso de São Paulo. O modo real (servidor +
  * banco) é coberto por e2e/live.mjs.
  *
@@ -89,6 +89,13 @@ function tools(page, problems) {
     },
     waitWater: (n) => page.waitForFunction(([key, count]) => (JSON.parse(localStorage.getItem(key) ?? "{}").state?.waterIntakes ?? []).length === count, [STORAGE_KEY, n], { timeout: 5000 }),
   };
+  t.strip = () => t.card().getByRole("button", { name: /Água · hoje/, expanded: false });
+  t.collapse = () => t.card().getByRole("button", { name: "Recolher água de hoje" });
+  /** O card nasce recolhido a cada visita à Início: abre se ainda estiver recolhido. */
+  t.expand = async () => {
+    if (await t.strip().count()) await t.strip().click();
+    await t.collapse().waitFor({ timeout: 5000 });
+  };
   t.drop = () => t.card().getByRole("button", { name: /Adicionar .* de água/ });
   t.radio = (name) => t.card().getByRole("radio", { name });
   return t;
@@ -107,10 +114,26 @@ function tools(page, problems) {
   const iCard = home.indexOf("Água · hoje");
   const iWeek = home.indexOf("Esta semana");
   check("Início: o card de água vem ANTES de 'Esta semana'", iCard > -1 && iWeek > -1 && iCard < iWeek, `${iCard} < ${iWeek}`);
+  const stripBox = await t.strip().boundingBox();
+  const stripText = norm(await t.card().innerText());
+  check("Faixa: o card nasce RECOLHIDO, com o total, a meta e a barra de progresso (0 L de 2,5 L, 0%)", (await t.strip().count()) === 1 && /Água · hoje/.test(stripText) && /0 L de 2,5 L/.test(stripText) && (await t.card().getByRole("progressbar", { name: "Progresso da meta diária de água" }).count()) === 1, stripText);
+  check("Faixa: sem botão +, sem porções, sem 'Faltam' (só o essencial)", (await t.drop().count()) === 0 && (await t.card().getByRole("radiogroup").count()) === 0 && !/Faltam/.test(stripText), stripText);
+  check("Faixa: baixa (até 64 px) e com alvo de toque de pelo menos 44 de altura", stripBox !== null && stripBox.height >= 44 && stripBox.height <= 64, JSON.stringify(stripBox));
+  await page.screenshot({ path: path.join(OUT, "water-home-collapsed-light.png") });
+  await t.strip().click();
+  await t.collapse().waitFor();
+  const openBox = await t.card().boundingBox();
+  check("Tocar na faixa abre o card inteiro: botão +, três porções e o que falta", (await t.drop().count()) === 1 && (await t.card().getByRole("radio").count()) === 3 && /Faltam 2,5 L/.test(norm(await t.card().innerText())));
+  check("Aberto, o card fica bem mais alto que a faixa", openBox !== null && stripBox !== null && openBox.height > stripBox.height + 100, `${stripBox?.height} -> ${openBox?.height}`);
+  check("Ao abrir, o foco vai para o botão de recolher (o toque na faixa a tirou da tela)", await t.collapse().evaluate((el) => el === document.activeElement));
+  await t.collapse().click();
+  await t.strip().waitFor();
+  check("Recolher volta para a faixa, sem perder o total, e leva o foco de volta para ela", (await t.drop().count()) === 0 && (await t.strip().evaluate((el) => el === document.activeElement)));
+  await t.expand();
   const cardText0 = norm(await t.card().innerText());
   check("Card: hoje começa em 0 L, com a meta de 2,5 L e o que falta", /0 L/.test(cardText0) && /de 2,5 L/.test(cardText0) && /Faltam 2,5 L/.test(cardText0), cardText0);
   check("Card: mostra os dias na meta da semana (x de 7)", /\d de 7 dias na meta/.test(cardText0), cardText0);
-  check("Card: a gota diz QUANTO vai somar (garrafa de 500 ml por padrão)", (await t.drop().getAttribute("aria-label")) === "Adicionar 500 ml de água");
+  check("Card: o botão + diz QUANTO vai somar (garrafa de 500 ml por padrão)", (await t.drop().getAttribute("aria-label")) === "Adicionar 500 ml de água");
   check("Card: copo 100 ml, garrafa 500 ml e garrafa grande 1 L, com a do meio selecionada", (await t.radio("Copo, 100 ml").getAttribute("aria-checked")) === "false" && (await t.radio("Garrafa, 500 ml").getAttribute("aria-checked")) === "true" && (await t.radio("Garrafa grande, 1 L").getAttribute("aria-checked")) === "false");
   check("Card: o grupo de porções tem nome acessível", (await t.card().getByRole("radiogroup", { name: "Quantidade por toque" }).count()) === 1);
   check("Card: a barra de progresso da meta existe e está em 0%", (await t.card().getByRole("progressbar", { name: "Progresso da meta diária de água" }).getAttribute("aria-valuenow")) === "0");
@@ -126,13 +149,13 @@ function tools(page, problems) {
   await t.drop().click();
   await t.waitWater(base + 1);
   let w = await t.todayWater();
-  check("Um toque na gota cria UM registro de 500 ml, agora", w.length === 1 && w[0].ml === 500 && w[0].at >= before - 1000 && w[0].at <= Date.now() + 1000, JSON.stringify(w));
+  check("Um toque no + cria UM registro de 500 ml, agora", w.length === 1 && w[0].ml === 500 && w[0].at >= before - 1000 && w[0].at <= Date.now() + 1000, JSON.stringify(w));
   check("O total aparece na hora (500 ml) e o Desfazer mostra quanto desfaz", /500 ml de 2,5 L/.test(norm(await t.card().innerText())) && (await t.card().getByRole("button", { name: "Desfazer +500 ml" }).count()) === 1);
   check("O leitor de tela é avisado do toque e do total do dia", /Adicionado 500 ml\. Hoje: 500 ml de 2,5 L\./.test(await t.card().locator('[role="status"]').innerText()));
 
   await t.radio("Copo, 100 ml").click();
   check("Escolher a porção NÃO soma nada", (await t.water()).length === base + 1);
-  check("A gota passa a somar 100 ml", (await t.drop().getAttribute("aria-label")) === "Adicionar 100 ml de água");
+  check("O + passa a somar 100 ml", (await t.drop().getAttribute("aria-label")) === "Adicionar 100 ml de água");
   await t.drop().click();
   await t.radio("Garrafa grande, 1 L").click();
   await t.drop().click();
@@ -170,6 +193,8 @@ function tools(page, problems) {
   // ---------- 3. a escolha persiste ----------
   check("A porção escolhida fica guardada no aparelho", (await t.prefs())?.selected === 2, JSON.stringify(await t.prefs()));
   await t.reload();
+  check("Depois de recarregar o card volta recolhido (o estado aberto não é guardado)", (await t.strip().count()) === 1 && (await t.drop().count()) === 0);
+  await t.expand();
   check("Depois de recarregar a garrafa grande continua selecionada", (await t.radio("Garrafa grande, 1 L").getAttribute("aria-checked")) === "true");
   check("Os registros sobrevivem ao recarregar", (await t.water()).length === base + 6);
 
@@ -193,9 +218,10 @@ function tools(page, problems) {
   await page.waitForSelector('[data-slot="drawer-content"]', { state: "detached", timeout: 5000 });
   await page.waitForTimeout(300);
   check("Quantidades salvas: o seletor mostra copo 200 ml, garrafa 600 ml e garrafa grande 1,5 L", (await t.radio("Copo, 200 ml").count()) === 1 && (await t.radio("Garrafa, 600 ml").count()) === 1 && (await t.radio("Garrafa grande, 1,5 L").count()) === 1);
-  check("A gota passa a somar 1,5 L (a garrafa grande continua escolhida)", (await t.drop().getAttribute("aria-label")) === "Adicionar 1,5 L de água");
+  check("O + passa a somar 1,5 L (a garrafa grande continua escolhida)", (await t.drop().getAttribute("aria-label")) === "Adicionar 1,5 L de água");
   check("As três ficam guardadas no aparelho, em ordem", JSON.stringify((await t.prefs())?.portions) === "[200,600,1500]", JSON.stringify(await t.prefs()));
   await t.reload();
+  await t.expand();
   check("Depois de recarregar as quantidades editadas continuam", (await t.radio("Garrafa grande, 1,5 L").count()) === 1);
   await t.card().getByRole("button", { name: "Editar quantidades" }).click();
   await t.sheet().waitFor();
@@ -239,6 +265,9 @@ function tools(page, problems) {
   goals = (await t.state()).goals.filter((g) => g.kind === "water_ml" && g.validFrom === WEEK_START);
   check("Remover a meta grava 0 a partir desta semana (convenção das outras metas)", goals.length === 1 && goals[0].target === 0, JSON.stringify(goals));
   await t.open("/inicio");
+  const noGoalStrip = norm(await t.card().innerText());
+  check("Sem meta: a faixa mostra só o total (sem 'de ...', sem barra)", /Água · hoje/.test(noGoalStrip) && !/ de \d/.test(noGoalStrip) && (await t.card().getByRole("progressbar").count()) === 0, noGoalStrip);
+  await t.expand();
   const noGoal = norm(await t.card().innerText());
   check("Sem meta: o contador funciona e o card convida a definir uma (sem 'Faltam' nem barra)", /Toque para definir uma meta de água/.test(noGoal) && !/Faltam/.test(noGoal) && (await t.card().getByRole("progressbar").count()) === 0, noGoal);
   await t.card().getByRole("button", { name: "Toque para definir uma meta de água" }).click();
@@ -377,13 +406,15 @@ function tools(page, problems) {
     await page.locator("main").getByRole("button", { name: /^Remover / }).first().click();
     await page.waitForTimeout(150);
   }
-  check("Sem registros hoje: estado vazio explica e aponta para a gota", /Nenhum registro hoje/.test(await t.main()) && /Toque na gota/.test(await t.main()));
+  check("Sem registros hoje: estado vazio explica e aponta para o +", /Nenhum registro hoje/.test(await t.main()) && /Toque em \+/.test(await t.main()));
   await page.screenshot({ path: path.join(OUT, "water-screen-light.png"), fullPage: true });
 
   // ---------- 7. tema escuro ----------
   await page.evaluate(() => localStorage.setItem("theme", "dark"));
   await t.open("/inicio");
   check("Tema escuro: o card de água aparece e não rola na horizontal", (await t.card().count()) === 1 && (await t.noHorizontalScroll()));
+  await page.screenshot({ path: path.join(OUT, "water-home-collapsed-dark.png") });
+  await t.expand();
   await t.drop().click();
   await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(OUT, "water-home-dark.png") });
@@ -404,6 +435,7 @@ function tools(page, problems) {
     return counts;
   }, STORAGE_KEY);
   await t.open("/inicio");
+  await t.expand();
   const oldCard = norm(await t.card().innerText());
   check("Demo antigo (sem água) abre sem reset: o card está vazio e convida a definir a meta", /0 L/.test(oldCard) && /Toque para definir uma meta de água/.test(oldCard), oldCard);
   await t.drop().click();
@@ -439,6 +471,7 @@ function tools(page, problems) {
     await m.open("/inicio");
     const link = p.locator("main").getByRole("link", { name: /Hoje você bebeu 0 L de 2,5 L: faltam 2,5 L\./ });
     check("Aviso de ritmo: às 18h, atrás do ritmo, a Início avisa (informativo, com link para a tela de água)", (await link.count()) === 1 && (await link.getAttribute("href")) === "/agua");
+    await m.expand();
     await m.radio("Garrafa grande, 1 L").click();
     await m.drop().click();
     await m.drop().click();
@@ -476,6 +509,7 @@ function tools(page, problems) {
     await m.open("/inicio");
     check("Meia-noite: o app acha que hoje é 14/10 às 23h58 em São Paulo", /Quarta-feira, 14 de outubro/.test(await m.main()), (await m.main()).slice(0, 80));
     const midnightBase = (await m.water()).length;
+    await m.expand();
     await m.drop().click();
     await m.waitWater(midnightBase + 1);
     const late = (await m.water()).find((x) => x.at > Date.parse("2026-10-14T00:00:00-03:00") + 23 * 3_600_000);

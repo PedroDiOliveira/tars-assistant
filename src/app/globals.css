@@ -46,7 +46,7 @@
   --color-m: var(--m);
   --color-m-soft: var(--m-soft);
   --color-m-ink: var(--m-ink);
-  /* texto sobre a cor cheia do módulo de água (a gota): claro no tema claro, escuro no escuro */
+  /* texto sobre a cor cheia do módulo de água (o botão "+"): claro no tema claro, escuro no escuro */
   --color-water-on: var(--water-on);
 
   --radius-sm: calc(var(--radius) * 0.5);
@@ -116,7 +116,7 @@
   --reading-soft: #deecdf;
   --reading-ink: #2d5b37;
   /* Água: o azul-água no LIMITE da família (matiz 185, o teto de src/lib/hues.ts), mais frio que o teal do Estudo
-     (matiz 171). `--water-on` é a cor do texto sobre `--water` cheio (a gota do contador). */
+     (matiz 171). `--water-on` é a cor do texto sobre `--water` cheio (o botão "+" do contador). */
   --water: #0a7e89;
   --water-soft: #d4eef0;
   --water-ink: #075860;
@@ -257,7 +257,7 @@ html[data-keyboard] {
   max-height: min(92dvh, calc(var(--vv-height, 100dvh) - env(safe-area-inset-top, 0px) - 0.5rem));
 }
 
-/* Água: o anel que sobe da gota a cada toque. Com "reduzir movimento" ligado, nada anima. */
+/* Água: o anel que sai do botão "+" a cada toque. Com "reduzir movimento" ligado, nada anima. */
 @keyframes water-ripple {
   from {
     transform: scale(0.8);

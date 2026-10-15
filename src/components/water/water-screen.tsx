@@ -16,7 +16,7 @@ import { useData, useToday } from "@/data";
 import { WEEK_LABELS } from "@/lib/constants";
 import type { DateKey } from "@/lib/dates";
 import { pluralize } from "@/lib/format";
-import { PortionPicker, UndoChip, useWaterTap, WaterAnnouncer, WaterDropButton } from "./water-tap";
+import { PortionPicker, UndoChip, useWaterTap, WaterAddButton, WaterAnnouncer } from "./water-tap";
 import { WaterDaySheet } from "./water-day-sheet";
 import { WaterEntrySheet } from "./water-entry-sheet";
 import { WaterIntakeList } from "./water-intake-list";
@@ -102,7 +102,7 @@ function WaterScreenContent() {
               <p className="text-sm font-medium text-muted-foreground">Cada toque soma</p>
               <p className="text-2xl font-bold tabular-nums">{formatLiters(tap.ml)}</p>
             </div>
-            <WaterDropButton ml={tap.ml} pulse={tap.pulse} onTap={() => void tap.tap()} />
+            <WaterAddButton ml={tap.ml} pulse={tap.pulse} onTap={() => void tap.tap()} />
           </div>
           <PortionPicker portions={tap.portions} selected={tap.selected} onSelect={tap.select} onEdit={() => setPortionsOpen(true)} />
           <UndoChip last={tap.last} onUndo={() => void tap.undo()} />
@@ -124,7 +124,7 @@ function WaterScreenContent() {
             <EmptyState
               icon={Droplet}
               title="Nenhum registro hoje"
-              description="Toque na gota para registrar o primeiro gole."
+              description="Toque em + para registrar o primeiro gole."
             />
           ) : (
             <WaterIntakeList intakes={intakes} onRemove={(intake) => void remove(intake, { toast: true })} />

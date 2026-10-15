@@ -1,15 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pencil, Undo2 } from "lucide-react";
+import { Pencil, Plus, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "cn";
 import { notify } from "@/components/shared/notify";
 import { hydrateWaterPrefs, useActions, useWaterPrefs, type PortionIndex } from "@/data";
-import { formatLiters, formatTotal, formatWaterParts } from "@/domain/water";
+import { formatLiters, formatTotal } from "@/domain/water";
 import { clockFromInstant } from "@/lib/dates";
 import { uid } from "@/lib/id";
-import { DropShape, PORTION_ICONS, PORTION_NAMES } from "./icons";
+import { PORTION_ICONS, PORTION_NAMES } from "./icons";
 
 /** Quanto tempo o "Desfazer" fica à mão depois de um toque. */
 const UNDO_MS = 6000;
@@ -108,31 +108,25 @@ export function WaterAnnouncer({ text }: { text: string }) {
   );
 }
 
-/** A gota em destaque: um toque soma a porção escolhida. O rótulo mostra sempre QUANTO vai somar. */
-export function WaterDropButton({ ml, pulse, onTap, className }: { ml: number; pulse: number; onTap: () => void; className?: string }) {
-  const { value, unit } = formatWaterParts(ml);
+/** O botão "+": um toque soma a porção escolhida. O rótulo embaixo diz sempre QUANTO vai somar. */
+export function WaterAddButton({ ml, pulse, onTap }: { ml: number; pulse: number; onTap: () => void }) {
   return (
     <button
       type="button"
       onClick={onTap}
       aria-label={`Adicionar ${formatLiters(ml)} de água`}
-      className={cn(
-        "relative grid aspect-[64/76] w-[5.25rem] shrink-0 place-items-center text-m transition-transform active:scale-95",
-        "rounded-[2.4rem] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-        className,
-      )}
+      className="group flex shrink-0 flex-col items-center gap-1.5 rounded-2xl p-1 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
-      {pulse > 0 ? <span key={pulse} aria-hidden className="water-ripple pointer-events-none absolute inset-2" /> : null}
-      <DropShape className="absolute inset-0 size-full" />
-      <span className="relative mt-5 flex flex-col items-center leading-none text-water-on">
-        <span className="text-xl font-bold tabular-nums">+{value}</span>
-        <span className="mt-0.5 text-xs font-semibold">{unit}</span>
+      <span className="relative grid size-14 place-items-center rounded-full bg-m text-water-on shadow-sm transition-transform group-active:scale-95">
+        {pulse > 0 ? <span key={pulse} aria-hidden className="water-ripple pointer-events-none absolute inset-0 text-m" /> : null}
+        <Plus className="relative size-7" strokeWidth={2.5} aria-hidden />
       </span>
+      <span className="text-xs font-semibold text-m-ink tabular-nums">{formatLiters(ml)}</span>
     </button>
   );
 }
 
-/** Copo, garrafa e garrafa grande. Escolher não soma nada: só define o que a gota vai somar. */
+/** Copo, garrafa e garrafa grande. Escolher não soma nada: só define o que o botão "+" vai somar. */
 export function PortionPicker({
   portions,
   selected,
@@ -186,7 +180,7 @@ export function PortionPicker({
 
 /**
  * "Desfazer +500 ml": o botão compacto do card da Início. Fica no cabeçalho, que nunca muda de altura: o aviso aparece
- * sem empurrar a gota (que mudaria de lugar debaixo do dedo) e sem ir parar atrás da barra de navegação.
+ * sem empurrar o botão "+" (que mudaria de lugar debaixo do dedo) e sem ir parar atrás da barra de navegação.
  */
 export function UndoPill({ last, onUndo }: { last: LastTap; onUndo: () => void }) {
   return (
