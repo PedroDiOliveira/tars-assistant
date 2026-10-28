@@ -27,6 +27,7 @@ export type { Account, StoreStatus } from "./layer";
 export { acceptAiConsent, useAiConsent } from "./consent";
 export { DataProvider } from "./provider";
 export { hydrateWaterPrefs, useWaterPrefs, type PortionIndex } from "./water-prefs";
+export { hydrateBreathPrefs, useBreathPrefs } from "./breath-prefs";
 
 const layer: DataLayer = IS_LIVE ? remoteLayer : demoLayer;
 

@@ -103,6 +103,10 @@ The daily goal is in litres and stored as integer millilitres per day. The card 
 
 Every tap is a row with its own id and an instant, not a per-day counter: a counter can't be made idempotent (a lost response would add twice), can't undo the exact tap and loses the time of day. The day is derived from the instant in `America/Sao_Paulo` on both sides, so a tap at 11:58 pm and one at 12:01 am land on different days — covered by a parity test and by an end-to-end test that crosses midnight with the browser's clock.
 
+### Breathe — a pause, not a task
+
+A quiet wind icon in the header opens `/respirar`: a small orb of light with a simple face that breathes with you. It closes its eyes as the session starts, inflates and blushes on the inhale, and makes an "o" and puffs out air on the exhale. Tap to start, tap to stop; a thin bar and the phase name ("Inspire", "Segure", "Expire") follow the same clock. Coherent breathing (5 s in, 5 s out) is the default; a pill shows the current rhythm and unfolds into a card with the longer-exhale, box and 4-7-8 options. One `requestAnimationFrame` reads `performance.now()` and drives every element through CSS variables, so nothing drifts; it respects reduced motion, pauses in the background and keeps the screen awake while running.
+
 ### Studying and reading
 
 The study timer is driven by timestamps, not by a running counter, so it survives a reload, a background switch and a locked screen. Reading is logged as "I was on page X, now I'm on page Y" — the app derives pages read, so edits and deletions always recompute cleanly.

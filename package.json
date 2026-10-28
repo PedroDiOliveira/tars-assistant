@@ -16,6 +16,7 @@
     "test:e2e:water": "node e2e/water.mjs",
     "test:e2e:profile": "node e2e/profile.mjs",
     "test:e2e:assistant": "node e2e/assistant.mjs",
+    "test:e2e:breathing": "node e2e/breathing.mjs",
     "test:splash": "node e2e/splash.mjs",
     "db:test": "vitest run supabase/tests",
     "db:push": "npx --yes supabase db push",

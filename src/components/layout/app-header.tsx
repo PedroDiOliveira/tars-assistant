@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Wind } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
+import { markBreathEntry } from "@/components/breathing/breath-origin";
 import { displayInitial } from "@/domain/profile";
 import { useAccount } from "@/data";
 
 /**
- * Cabeçalho enxuto: marca à esquerda, assistente e perfil à direita. No modo demonstração o selo
+ * Cabeçalho enxuto: marca à esquerda, respiração, assistente e perfil à direita. No modo demonstração o selo
  * fica discreto, mas visível — a spec exige que dados fictícios nunca pareçam dados reais. No modo real
  * não há selo, e o assistente só aparece se o servidor tem um provedor de IA configurado.
+ * A respiração guiada é um apoio, não uma ação da rotina: ícone mais apagado que o do assistente.
  */
 export function AppHeader() {
   const { isLive, displayName, aiEnabled } = useAccount();
@@ -25,6 +27,14 @@ export function AppHeader() {
         )}
       </div>
       <div className="-mr-2 flex items-center">
+        <Link
+          href="/respirar"
+          onClick={markBreathEntry}
+          aria-label="Respirar: pausa guiada"
+          className="grid size-11 place-items-center rounded-full text-foreground/50 transition active:bg-muted"
+        >
+          <Wind className="size-5" aria-hidden />
+        </Link>
         {aiEnabled ? (
           <Link
             href="/assistente"
