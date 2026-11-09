@@ -419,12 +419,14 @@ try {
   await pageA.waitForSelector("text=séries concluídas");
   check("Treino em andamento é recuperado depois de recarregar", before === (await progress()) && before.startsWith("1 de"), before);
   await pageA.getByRole("button", { name: "Finalizar treino" }).click();
-  await pageA.getByRole("alertdialog").waitFor();
-  await pageA.getByRole("alertdialog").getByRole("button", { name: "Finalizar treino" }).dblclick().catch(() => {});
+  const finishSheet = pageA.getByRole("dialog", { name: "Como foi o treino?" });
+  await finishSheet.waitFor();
+  await finishSheet.getByRole("button", { name: /^Pesado/ }).dblclick().catch(() => {});
   await pageA.waitForURL("**/treino", { timeout: 10000 });
   await pageA.waitForTimeout(800);
-  const done = await dbRows("select s.name_snapshot, count(distinct se.id)::int as exs, count(es.id)::int as sets from public.workout_sessions s left join public.session_exercises se on se.session_id = s.id left join public.exercise_sets es on es.session_exercise_id = se.id group by s.id, s.name_snapshot");
+  const done = await dbRows("select s.name_snapshot, s.effort, count(distinct se.id)::int as exs, count(es.id)::int as sets from public.workout_sessions s left join public.session_exercises se on se.session_id = s.id left join public.exercise_sets es on es.session_exercise_id = se.id group by s.id, s.name_snapshot, s.effort");
   check("Finalizar (toque duplo) grava UMA sessão, com a cópia dos nomes e só a série concluída", done.length === 1 && done[0].name_snapshot === "Treino A — Peito e costas" && done[0].sets === 1, JSON.stringify(done));
+  check("O \"como foi?\" escolhido ao finalizar vai para o banco (Pesado = 3)", done.length === 1 && done[0].effort === 3, JSON.stringify(done));
   check("Depois de finalizar o rascunho local é apagado", (await pageA.evaluate(() => JSON.parse(localStorage.getItem("tars-draft-v1") ?? "{}")?.state?.draft ?? null)) === null);
 
   // renomear exercício e a ficha NÃO reescreve o treino já feito
@@ -870,7 +872,7 @@ try {
     // exportação inclui a água
     const exportResponse = await pageA.request.get("/api/export");
     const exported = await exportResponse.json();
-    check("Água: a exportação (v3) leva os registros de água e a meta", exported.version === 3 && Array.isArray(exported.data.waterIntakes) && exported.data.waterIntakes.length === rows.length && exported.data.goals.some((g) => g.kind === "water_ml" && g.target === 2500), `${exported.version} ${exported.data.waterIntakes?.length}`);
+    check("Água: a exportação (v5) leva os registros de água e a meta", exported.version === 5 && Array.isArray(exported.data.waterIntakes) && exported.data.waterIntakes.length === rows.length && exported.data.goals.some((g) => g.kind === "water_ml" && g.target === 2500), `${exported.version} ${exported.data.waterIntakes?.length}`);
 
     // recarregar mantém, e o outro usuário não vê nada
     await pageA.goto("/inicio");
@@ -883,6 +885,7 @@ try {
       await login(page, "outro@tars.example", "outra-senha-forte-1");
       await page.waitForURL("**/inicio");
       await appReady(page);
+      await expandCard(page);
       check("Água: outro usuário começa com 0 L e sem meta (nada vaza entre contas)", /0 L/.test(await cardText(page)) && /Toque para definir uma meta de água/.test(await cardText(page)), await cardText(page));
       await ctx.close();
     }
@@ -892,7 +895,7 @@ try {
   await pageA.goto("/financas");
   await appReady(pageA);
   check("Com IA configurada, o botão 'Por texto' aparece em Finanças", (await pageA.getByRole("button", { name: "Por texto" }).count()) === 1);
-  check("Com IA configurada, o cabeçalho mostra o assistente", (await pageA.locator("a[aria-label='Abrir assistente']").count()) === 1);
+  check("Com IA configurada, o cabeçalho mostra o assistente", (await pageA.locator("a[aria-label='Abrir o Tars']").count()) === 1);
 
   await pageA.goto("/assistente");
   await appReady(pageA);
@@ -900,10 +903,10 @@ try {
   await privacy.waitFor({ timeout: 10000 });
   const privacyText = norm(await privacy.innerText());
   check("Primeiro uso: aviso de privacidade diz para QUEM os dados vão e o que NÃO vai", /xAI \(Grok\)/.test(privacyText) && /Descrições dos seus lançamentos não são enviadas/.test(privacyText), privacyText.slice(0, 120));
-  const composer = pageA.getByLabel("Mensagem para o assistente");
+  const composer = pageA.getByLabel("Mensagem para o Tars");
   check("Sem aceitar o aviso, o campo de mensagem fica bloqueado e nada é enviado", (await composer.isDisabled()) && xai.received.length === 0);
-  await pageA.getByRole("button", { name: "Entendi, usar o assistente" }).click();
-  await pageA.waitForFunction(() => !document.querySelector("input[aria-label='Mensagem para o assistente']")?.disabled);
+  await pageA.getByRole("button", { name: "Entendi, conversar com o Tars" }).click();
+  await pageA.waitForFunction(() => !document.querySelector("input[aria-label='Mensagem para o Tars']")?.disabled);
   check("Aceitar libera o campo e guarda o consentimento só neste aparelho", (await pageA.evaluate(() => localStorage.getItem("tars-ai-consent-v1"))) === "1");
 
   const usageNow = async () => (await dbRows("select coalesce(sum(requests), 0)::int as requests, coalesce(sum(tokens), 0)::int as tokens from public.ai_usage where user_id = $1", [userA]))[0];
@@ -1026,7 +1029,7 @@ try {
     const disposition = exported.headers()["content-disposition"] ?? "";
     const file = await exported.json();
     check("Exportar: baixa um .json com a data no nome", exported.status() === 200 && /attachment; filename="tars-backup-\d{4}-\d{2}-\d{2}\.json"/.test(disposition), disposition);
-    check("Exportar: formato versionado e dados do usuário A (inclusive categorias arquivadas)", file.app === "tars" && file.version === 3 && Array.isArray(file.data.waterIntakes) && Array.isArray(file.data.runningSessions) && file.data.runningSessions.length >= 4 && file.data.runningSessions.every((r) => Number.isInteger(r.distanceMeters)) && file.data.transactions.length >= 3 && file.data.categories.some((c) => c.archived !== true) && file.data.books !== undefined, `${file.data.transactions.length} lançamentos`);
+    check("Exportar: formato versionado e dados do usuário A (inclusive categorias arquivadas)", file.app === "tars" && file.version === 5 && file.data.trainingProfile !== undefined && Array.isArray(file.data.trainingPlans) && Array.isArray(file.data.waterIntakes) && Array.isArray(file.data.runningSessions) && file.data.runningSessions.length >= 4 && file.data.runningSessions.every((r) => Number.isInteger(r.distanceMeters)) && file.data.transactions.length >= 3 && file.data.categories.some((c) => c.archived !== true) && file.data.books !== undefined, `${file.data.transactions.length} lançamentos`);
     check("Exportar: não vaza e-mail, id de usuário nem sessão", !/pedro@tars|"user_id"|userId|access_token/i.test(JSON.stringify(file)));
     check("Exportar: nunca é cacheável", /no-store/.test(exported.headers()["cache-control"] ?? ""));
     const anon = await (await newContext()).request.get("/api/export");
@@ -1106,6 +1109,64 @@ try {
     );
     await ctx.setOffline(false);
     await ctx.close();
+  }
+
+  /* ----- plano de treino: perguntas -> IA (falsa) dentro das regras -> aceitar; IA fora do ar -> modelo pronto ----- */
+  {
+    const question = () => pageA.locator("#plan-question").innerText();
+    const btn = (name) => pageA.getByRole("button", { name, exact: typeof name === "string" });
+    const tokensBefore = (await dbRows("select coalesce(sum(tokens), 0)::int as n from public.ai_usage where user_id = $1", [userA]))[0].n;
+    xai.reset();
+    await pageA.goto("/treino/plano/perguntas");
+    await appReady(pageA);
+    await pageA.getByRole("button", { name: /Ganhar massa/ }).click();
+    await pageA.getByRole("button", { name: /Já treino/ }).click();
+    await btn("4 dias").click();
+    await btn("60 min").click();
+    await pageA.getByRole("button", { name: /^Academia/ }).click();
+    await btn("Pular esta parte").click();
+    check("Plano (real): pular a saúde leva às prioridades", (await question()) === "Quer dar mais atenção a algum grupo?");
+    await btn("Sem prioridade, continuar").click();
+    await btn("Gerar meu plano").click();
+    await pageA.waitForURL("**/treino/plano");
+    await pageA.waitForSelector("text=Recado do Tars", { timeout: 20000 });
+    const [profileRow] = await dbRows("select screening, health_consent_at, limitations, days_per_week from public.training_profiles where user_id = $1", [userA]);
+    check("Plano (real): respostas no banco, sem consentimento nem limitações (pulou a saúde)", profileRow?.screening === "nao-respondida" && profileRow.health_consent_at === null && profileRow.limitations.length === 0 && profileRow.days_per_week === 4, JSON.stringify(profileRow));
+    const review = norm(await pageA.locator("main").first().innerText());
+    check("Plano (real): montado com IA, com o resumo que ela escreveu", review.includes("Plano montado com IA") && review.includes("Resposta do modelo falso."), review.slice(0, 120));
+    const sent = xai.received.at(-1)?.body;
+    check("Plano (real): a IA recebe saída estruturada estrita, sem ferramentas", sent?.response_format?.json_schema?.strict === true && !("tools" in (sent ?? {})));
+    check("Plano (real): nada de e-mail no que vai para a IA", !JSON.stringify(sent ?? {}).includes("tars.example"));
+    const tokensAfter = (await dbRows("select coalesce(sum(tokens), 0)::int as n from public.ai_usage where user_id = $1", [userA]))[0].n;
+    check("Plano (real): os tokens gastos entram no limite de uso da IA", tokensAfter - tokensBefore === 3900, `${tokensBefore} -> ${tokensAfter}`);
+    check("Plano (real): gerar não grava nenhum plano no banco (só aceitar grava)", (await dbRows("select count(*)::int as n from public.training_plans where user_id = $1", [userA]))[0].n === 0);
+
+    await btn("Usar este plano").click();
+    const apply = pageA.getByRole("dialog", { name: "Usar este plano" });
+    await apply.waitFor();
+    await apply.getByRole("button", { name: "Usar este plano" }).click();
+    await pageA.waitForURL("**/treino");
+    await pageA.waitForSelector("text=Plano salvo");
+    const saved = await dbRows("select source, details->>'model' as model, details->>'promptVersion' as version, jsonb_array_length(details->'days') as days from public.training_plans where user_id = $1", [userA]);
+    check("Plano (real): aceito = um registro, da IA, com modelo e versões", saved.length === 1 && saved[0].source === "ai" && saved[0].model === "fake-grok" && saved[0].version === "plano-v4/regras-v3" && saved[0].days === 4, JSON.stringify(saved));
+    const active = (await dbRows("select name from public.workout_plans where user_id = $1 and archived_at is null order by name", [userA])).map((r) => r.name);
+    check("Plano (real): as fichas ativas são as do plano (as antigas foram arquivadas)", JSON.stringify(active) === JSON.stringify(["Inferior A", "Inferior B", "Superior A", "Superior B"]), JSON.stringify(active));
+
+    await pageA.goto("/treino/plano");
+    await appReady(pageA);
+    check("Plano (real): o plano atual aparece depois de recarregar", /Plano atual · desde \d\d\/\d\d · montado com IA/.test(norm(await pageA.locator("main").first().innerText())));
+
+    xai.setDown(true);
+    await btn(/Gerar um plano novo/).click();
+    await pageA.waitForSelector("text=Recado do Tars", { timeout: 20000 });
+    const fallback = norm(await pageA.locator("main").first().innerText());
+    check("Plano (real): IA fora do ar -> o plano sai do modelo pronto, com o aviso", fallback.includes("Plano do modelo pronto") && fallback.includes("A IA não respondeu a tempo"), fallback.slice(0, 160));
+    xai.setDown(false);
+    // As ações raras do rascunho ficam no menu "Mais opções".
+    await btn("Mais opções do plano").click();
+    await pageA.getByRole("dialog", { name: "Mais opções" }).getByRole("button", { name: "Descartar este plano", exact: true }).click();
+    await pageA.waitForSelector("text=Plano atual");
+    check("Plano (real): descartar a proposta não muda nada no banco", (await dbRows("select count(*)::int as n from public.training_plans where user_id = $1", [userA]))[0].n === 1);
   }
 
   /* ----- configurações ----- */
@@ -1300,7 +1361,7 @@ try {
     await login(page, "outro@tars.example", "outra-senha-forte-1");
     await page.waitForURL("**/inicio");
     await appReady(page);
-    check("Sem IA: o cabeçalho não mostra o botão do assistente", (await page.locator("a[aria-label='Abrir assistente']").count()) === 0);
+    check("Sem IA: o cabeçalho não mostra o botão do assistente", (await page.locator("a[aria-label='Abrir o Tars']").count()) === 0);
     await page.goto("/financas");
     await appReady(page);
     check("Sem IA: 'Por texto' some, mas o lançamento manual continua", (await page.getByRole("button", { name: "Por texto" }).count()) === 0 && (await page.getByRole("button", { name: "Lançamento", exact: false }).count()) >= 1);
@@ -1315,7 +1376,7 @@ try {
     );
     await page.goto("/assistente");
     await appReady(page);
-    check("Sem IA: abrir /assistente explica que não está configurado (e o campo fica bloqueado)", (await page.getByText("O assistente não está configurado neste app").count()) === 1 && (await page.getByLabel("Mensagem para o assistente").isDisabled()));
+    check("Sem IA: abrir /assistente explica que não está configurado (e o campo fica bloqueado)", (await page.getByText("O Tars não está configurado neste app").count()) === 1 && (await page.getByLabel("Mensagem para o Tars").isDisabled()));
     const api = await ctx.request.post("/api/assistant", { data: { message: "oi" }, headers: { origin: `http://127.0.0.1:${NOAI_PORT}` } });
     check("Sem IA: a API responde 503 'ai_disabled' (sem tentar o provedor)", api.status() === 503 && (await api.json()).error === "ai_disabled", String(api.status()));
     const snapshot = await (await ctx.request.get("/api/snapshot")).json();

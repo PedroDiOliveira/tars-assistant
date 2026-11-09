@@ -18,6 +18,9 @@ import type {
   RunningSession,
   StudySession,
   Subject,
+  TrainingPlanChange,
+  TrainingPlanRecord,
+  TrainingProfile,
   Transaction,
   WaterIntake,
   WorkoutPlan,
@@ -38,6 +41,12 @@ export interface DataSnapshot {
   readingSessions: ReadingSession[];
   runningSessions: RunningSession[];
   waterIntakes: WaterIntake[];
+  /** respostas do formulário do plano de treino; null até a pessoa responder */
+  trainingProfile: TrainingProfile | null;
+  /** planos de treino aceitos, do mais antigo ao mais novo */
+  trainingPlans: TrainingPlanRecord[];
+  /** ajustes aceitos no plano em uso, do mais antigo ao mais novo */
+  trainingPlanChanges: TrainingPlanChange[];
 }
 
 /* ---------- Finanças ---------- */

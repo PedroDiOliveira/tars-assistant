@@ -150,7 +150,7 @@ const TODAY = sp.format(Date.now());
 
   // ---------- 6. pergunta sem dados e pergunta fora do repertório: só texto ----------
   const groupsBefore = await group(/Resumo/).count();
-  await page.getByLabel("Mensagem para o assistente").fill("qual a capital da França?");
+  await page.getByLabel("Mensagem para o Tars").fill("qual a capital da França?");
   await page.getByRole("button", { name: "Enviar" }).click();
   await page.getByText(/Ainda não sei responder isso/).waitFor({ timeout: 10000 });
   check("Pergunta fora do repertório: só texto, nenhum card novo", (await group(/Resumo/).count()) === groupsBefore);

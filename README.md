@@ -84,6 +84,10 @@ Logging an expense opens a numeric keypad first, with recent categories and save
 
 Starting a workout pre-fills every set with **what you lifted last time**, so confirming a set is one tap. The live session is kept on the device and only written on finish: gyms have bad signal, and an abandoned session should never pollute the history or count toward the weekly goal.
 
+When every planned set last time reached the top of the rep range at the same load, the exercise card suggests the next load (**double progression**), with the reason spelled out; it is applied with one tap, never silently. Finishing asks one question, "how did it feel?" (four levels, or skip). A monthly summary turns the log into a picture without any AI: sessions vs last month, weeks on goal, sets per muscle group, records, what progressed and what has stalled for three or more sessions. Exercises can be linked to a built-in library (equipment, muscles, movement pattern), which is what sets the load step and what the training plan builds on.
+
+**Training plan.** A short questionnaire (goal, experience, days, time per session, where you train, optional health questions behind an explicit consent screen, priorities and one free-text note) produces a plan as regular workout templates. The app's rules build the skeleton — split, slots, sets, rep ranges, what fits in the time, and a closed list of allowed exercises per slot filtered by equipment, sore regions and experience — and the AI (Groq) only picks within those lists and explains, through strict structured output whose schema enumerates each slot's options. Anything invalid gets one retry and then falls back to the rules' own plan, so a valid plan always comes out, with or without AI. You review it, swap any exercise for an equivalent one, and accepting creates the templates (archiving the old ones by default) in a single atomic command.
+
 <div align="center">
 <img src="docs/screenshots/workout.png" width="250" alt="Training" />
 <img src="docs/screenshots/workout-session.png" width="250" alt="Live session with rest timer" />

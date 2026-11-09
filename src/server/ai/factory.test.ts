@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { parseEnv } from "../env-schema";
-import { createProvider, extraBodyFor, providerLabel } from "./factory";
+import { createPlanProvider, createProvider, extraBodyFor, providerLabel } from "./factory";
 
 const live = { NEXT_PUBLIC_APP_MODE: "live", SUPABASE_URL: "https://abc.supabase.co", SUPABASE_PUBLISHABLE_KEY: "sb_publishable_x", CRON_SECRET: "0123456789abcdef" };
 const env = (extra: Record<string, string>) => parseEnv({ ...live, ...extra });
@@ -58,5 +58,15 @@ describe("createProvider", () => {
     await created!.chat({ messages: [{ role: "user", content: "oi" }], tools: [], maxTokens: 10, signal: AbortSignal.timeout(2000) });
     const body = JSON.parse(((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body) as string);
     expect(body).toMatchObject({ reasoning_effort: "low", include_reasoning: false, max_tokens: 10 });
+  });
+});
+
+describe("createPlanProvider", () => {
+  it("usa o AI_PLAN_MODEL quando configurado e, sem ele, o AI_MODEL; o nome do modelo vem junto (vai para o plano aceito)", () => {
+    expect(createPlanProvider(env({ AI_PROVIDER: "groq", AI_API_KEY: "k", AI_MODEL: "openai/gpt-oss-20b", AI_PLAN_MODEL: "openai/gpt-oss-120b" }))?.model).toBe("openai/gpt-oss-120b");
+    expect(createPlanProvider(env({ AI_PROVIDER: "groq", AI_API_KEY: "k", AI_MODEL: "openai/gpt-oss-20b" }))?.model).toBe("openai/gpt-oss-20b");
+  });
+  it("IA desligada: null (o plano sai do modelo pronto)", () => {
+    expect(createPlanProvider(env({ AI_PROVIDER: "none" }))).toBeNull();
   });
 });

@@ -1,3 +1,5 @@
+import { AssistantAvatar } from "@/components/brand/assistant-avatar";
+import { ASSISTANT } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { MessageCards } from "./cards/card-group";
 import type { Message } from "./chat-store";
@@ -34,6 +36,9 @@ export function MessageView({ message, today, categoryName, onConfirm, onEdit, o
       id={messageDomId(message.id)}
       className="scroll-mt-16 space-y-3 text-[0.95rem] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300"
     >
+      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <AssistantAvatar size="xs" /> {ASSISTANT.name}
+      </p>
       <ReplyText text={message.text} />
       {message.cards?.length ? (
         <MessageCards cards={message.cards} />

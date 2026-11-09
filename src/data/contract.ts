@@ -1,4 +1,8 @@
+import type { TrainingAdjustTrigger } from "@/domain/types";
+import type { SuggestedChange } from "@/domain/training-adjust";
+import type { CurrentPlanView } from "@/domain/training-current";
 import type { AssistantReply } from "@/domain/assistant";
+import type { PlanProposal } from "@/domain/training-proposal";
 import type { DateKey } from "@/lib/dates";
 import type {
   BookFields,
@@ -19,8 +23,10 @@ import type {
   GoalKind,
   ReadingSession,
   RunningSession,
+  SessionEffort,
   SetLog,
   StudySession,
+  TrainingProfile,
   Transaction,
   TxTemplate,
 } from "@/domain/types";
@@ -115,7 +121,8 @@ export interface DataActions {
   /* metas */
   setGoal(input: GoalInput): Promise<Result>;
   /* treino */
-  finishWorkout(): Promise<Result<FinishWorkoutOutcome>>;
+  /** `effort`: o "como foi?" escolhido ao finalizar (ausente = finalizou sem avaliar) */
+  finishWorkout(effort?: SessionEffort): Promise<Result<FinishWorkoutOutcome>>;
   deleteWorkoutSession(id: string): Promise<Result>;
   /* estudos */
   startStudy(subjectId: string): Promise<Result>;
@@ -161,6 +168,27 @@ export interface DataActions {
   addWater(input: NewWaterIntake): Promise<Result<{ id: string }>>;
   /** Remover um registro que não existe (mais) não é erro. */
   removeWater(id: string): Promise<Result>;
+  /* plano de treino */
+  /** Salva as respostas do formulário (o instante da resposta é carimbado aqui). */
+  saveTrainingProfile(input: Omit<TrainingProfile, "updatedAt">): Promise<Result>;
+  /**
+   * Aceita a proposta: cria o que falta e as fichas novas, arquiva `archivePlanIds` e guarda o plano, tudo de uma vez.
+   * Falha se as respostas mudaram depois da proposta (ela ficou desatualizada).
+   */
+  applyTrainingPlan(input: { proposal: PlanProposal; archivePlanIds: string[] }): Promise<Result>;
+  /**
+   * Grava um ajuste aceito no plano EM USO (fichas + histórico), a partir das mudanças que a pessoa deixou marcadas na
+   * prévia. Falha se nenhuma mudança vale mais nas fichas de agora.
+   */
+  adjustTrainingPlan(input: {
+    view: CurrentPlanView;
+    changes: SuggestedChange[];
+    trigger: TrainingAdjustTrigger;
+    source: "ai" | "rules";
+    model?: string;
+    promptVersion: string;
+    nameOf: (exerciseKey: string) => string;
+  }): Promise<Result>;
 }
 
 /**
@@ -185,6 +213,23 @@ export interface LocalActions {
  */
 export interface AssistantApi {
   ask(message: string): Promise<Result<AssistantReply>>;
+}
+
+/**
+ * Gera uma PROPOSTA de plano a partir das respostas salvas. No modo real vai ao servidor (IA dentro das regras, ou o
+ * modelo pronto); no demo é o modelo pronto, local. Nada é gravado: a proposta fica no aparelho até ser aceita.
+ */
+export interface TrainingPlanApi {
+  /** `split` = a divisão escolhida no rascunho (training-splits); sem ela, o padrão das regras para os dias. */
+  generate(options?: { split?: string }): Promise<Result<PlanProposal>>;
+  /**
+   * Sugestões da IA para o rascunho a partir do que a pessoa escreveu (até 3, já validadas contra este rascunho). Não
+   * aplica nada: a pessoa escolhe na prévia. Sem IA (demo, desligada, limite): falha com a mensagem para a tela.
+   */
+  adjust(
+    proposal: PlanProposal,
+    text: string,
+  ): Promise<Result<{ changes: SuggestedChange[]; message: string | null; model?: string; promptVersion: string }>>;
 }
 
 export type Actions = DataActions & LocalActions;

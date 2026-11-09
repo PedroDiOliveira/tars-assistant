@@ -25,4 +25,7 @@ export const EMPTY_APP_DATA: AppData = {
   readingSessions: [],
   runningSessions: [],
   waterIntakes: [],
+  trainingProfile: null,
+  trainingPlans: [],
+  trainingPlanChanges: [],
 };

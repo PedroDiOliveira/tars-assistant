@@ -7,6 +7,8 @@ import type { TarsState } from "./store";
  *      sem isto, finalizar um treino iniciado antes da atualização geraria uma sessão sem id.
  *  v3: corridas (`runningSessions`). Estados antigos não têm a coleção: passam a ter uma lista vazia.
  *  v4: água (`waterIntakes`). Mesmo tratamento: lista vazia, nada do que já existe é tocado.
+ *  v5: plano de treino (`trainingProfile`, `trainingPlans`): sem respostas e sem planos aceitos.
+ *  v6: ajustes no plano em uso (`trainingPlanChanges`): lista vazia.
  */
 export function migrateDemoState(persisted: unknown, version: number): TarsState {
   let state = persisted as TarsState;
@@ -18,6 +20,12 @@ export function migrateDemoState(persisted: unknown, version: number): TarsState
   }
   if (version < 4 || !Array.isArray(state.waterIntakes)) {
     state = { ...state, waterIntakes: Array.isArray(state.waterIntakes) ? state.waterIntakes : [] };
+  }
+  if (version < 5 || !Array.isArray(state.trainingPlans)) {
+    state = { ...state, trainingProfile: state.trainingProfile ?? null, trainingPlans: Array.isArray(state.trainingPlans) ? state.trainingPlans : [] };
+  }
+  if (version < 6 || !Array.isArray(state.trainingPlanChanges)) {
+    state = { ...state, trainingPlanChanges: Array.isArray(state.trainingPlanChanges) ? state.trainingPlanChanges : [] };
   }
   return state;
 }

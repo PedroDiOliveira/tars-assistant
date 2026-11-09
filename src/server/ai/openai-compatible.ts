@@ -69,8 +69,16 @@ export function createOpenAiCompatibleProvider({ name, apiKey, model, baseUrl, e
           body: JSON.stringify({
             model,
             messages: request.messages.map(toWireMessage),
-            tools: request.tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } })),
-            tool_choice: "auto",
+            // Sem ferramentas, nem `tools` nem `tool_choice` vão: alguns provedores recusam a escolha sem a lista.
+            ...(request.tools.length > 0
+              ? {
+                  tools: request.tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } })),
+                  tool_choice: "auto",
+                }
+              : {}),
+            ...(request.responseFormat
+              ? { response_format: { type: "json_schema", json_schema: { name: request.responseFormat.name, strict: true, schema: request.responseFormat.schema } } }
+              : {}),
             max_tokens: request.maxTokens,
             temperature: 0.2,
             ...extraBody,
@@ -86,7 +94,8 @@ export function createOpenAiCompatibleProvider({ name, apiKey, model, baseUrl, e
       if (!response.ok) {
         const { status } = response;
         if (status === 401 || status === 403) throw new ProviderError("unauthorized", "O provedor de IA recusou a chave configurada.", status);
-        if (status === 402 || status === 429) throw new ProviderError("rate_limited", "O provedor de IA recusou por limite de uso ou crédito.", status);
+        // 413: na Groq, é o limite de tokens por minuto ("Request too large ... TPM"), não um pedido malformado.
+        if (status === 402 || status === 413 || status === 429) throw new ProviderError("rate_limited", "O provedor de IA recusou por limite de uso ou crédito.", status);
         if (status === 408 || status === 504) throw new ProviderError("timeout", "O provedor de IA demorou demais.", status);
         if (status >= 500) throw new ProviderError("unavailable", "O provedor de IA está indisponível.", status);
         throw new ProviderError("bad_response", `O provedor de IA recusou o pedido (HTTP ${status}).`, status);

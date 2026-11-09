@@ -22,12 +22,15 @@ export type {
   FinishWorkoutOutcome,
   Result,
   Success,
+  TrainingPlanApi,
 } from "./contract";
 export type { Account, StoreStatus } from "./layer";
 export { acceptAiConsent, useAiConsent } from "./consent";
 export { DataProvider } from "./provider";
 export { hydrateWaterPrefs, useWaterPrefs, type PortionIndex } from "./water-prefs";
 export { hydrateBreathPrefs, useBreathPrefs } from "./breath-prefs";
+export { hydratePlanProposal, usePlanProposal } from "./plan-proposal";
+export { isSuggestionSnoozed, snoozeSuggestion } from "./plan-suggestions";
 
 const layer: DataLayer = IS_LIVE ? remoteLayer : demoLayer;
 
@@ -42,6 +45,7 @@ export const useAccount = layer.useAccount;
 export const signOut = layer.signOut;
 export const updateDisplayName = layer.updateDisplayName;
 export const assistant = layer.assistant;
+export const trainingPlan = layer.trainingPlan;
 
 export function useActions() {
   return layer.actions;

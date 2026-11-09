@@ -10,7 +10,13 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Surface } from "@/components/shared/surface";
 import { SubHeader } from "@/components/layout/sub-header";
-import { sessionDurationMinutes, sessionSetCount, sessionVolume, sortSessionsDesc } from "@/domain/workouts";
+import {
+  EFFORT_LABELS,
+  sessionDurationMinutes,
+  sessionSetCount,
+  sessionVolume,
+  sortSessionsDesc,
+} from "@/domain/workouts";
 import { useActions, useData, useToday } from "@/data";
 import { formatDayRelative, formatMinutes } from "@/lib/format";
 import { formatVolume, summarizeSets } from "./format-sets";
@@ -51,7 +57,14 @@ function HistoryScreenContent() {
                   className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left transition active:bg-muted/60"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{s.nameSnapshot}</p>
+                    <p className="flex items-center gap-2">
+                      <span className="truncate font-medium">{s.nameSnapshot}</span>
+                      {s.effort ? (
+                        <span className="shrink-0 rounded-full bg-m-soft px-2 py-0.5 text-xs font-medium text-m-ink">
+                          {EFFORT_LABELS[s.effort]}
+                        </span>
+                      ) : null}
+                    </p>
                     <p className="text-sm text-muted-foreground">
                       {formatDayRelative(s.occurredOn, today)} · {sessionSetCount(s)} séries ·{" "}
                       {formatMinutes(sessionDurationMinutes(s))} · volume {formatVolume(sessionVolume(s))}

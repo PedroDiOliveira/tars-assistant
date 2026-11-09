@@ -1,8 +1,13 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Command } from "@/domain/commands";
+import { isLibraryKey, libraryEntry } from "@/domain/exercise-library";
 import { applyCommand } from "@/domain/reducers";
+import { buildApplyPlan, rulesProposal } from "@/domain/training-proposal";
+import { ADJUST_RULES_VERSION, focusAdjustment, ruleSuggestions } from "@/domain/training-adjust";
+import { buildAdjustPlan, currentPlanView } from "@/domain/training-current";
+import { swapOptions } from "@/domain/training-rules";
 import type { AppData } from "@/domain/snapshot";
-import type { Book, SessionExercise, WorkoutSession } from "@/domain/types";
+import type { Book, SessionExercise, TrainingProfile, WorkoutSession } from "@/domain/types";
 import { dateKeyFromInstant } from "@/lib/dates";
 import { uid } from "@/lib/id";
 import { TestDb } from "./harness";
@@ -170,6 +175,16 @@ describe("paridade — treino", () => {
     const w = session(s, startedAt, { finishedAt: startedAt + 40 * 60_000 });
     await s.step({ type: "workout.finish", session: w });
     expect(s.state.sessions[0].occurredOn).toBe("2026-10-07");
+  });
+
+  it("o \"como foi?\" é gravado junto da sessão; sem avaliação, fica ausente nos dois lados", async () => {
+    const s = await Scenario.start();
+    const rated = session(s, Date.UTC(2026, 9, 7, 17, 0), { effort: 3 });
+    const unrated = session(s, Date.UTC(2026, 9, 8, 17, 0));
+    await s.step({ type: "workout.finish", session: rated });
+    await s.step({ type: "workout.finish", session: unrated });
+    expect(s.state.sessions.find((x) => x.id === rated.id)?.effort).toBe(3);
+    expect(s.state.sessions.find((x) => x.id === unrated.id)).not.toHaveProperty("effort");
   });
 
   it("sessão sem nenhuma série concluída é recusada pelo banco", async () => {
@@ -359,6 +374,26 @@ describe("paridade — catálogos", () => {
     await s.step({ type: "exercise.archive", id, archived: true });
     await s.step({ type: "exercise.archive", id, archived: false });
     expect((await s.step({ type: "exercise.archive", id: uid(), archived: true })).error).toBe("Exercício não encontrado.");
+  });
+
+  it("exercícios: vínculo com a biblioteca ao criar, trocar e desfazer (editar sem a chave remove o vínculo)", async () => {
+    const s = await Scenario.start();
+    const id = uid();
+    await s.step({ type: "exercise.add", exercise: { id, name: "Serrote", muscleGroup: "Costas", loadType: "external", libraryKey: "remada-unilateral" } });
+    expect(s.state.exercises.find((e) => e.id === id)?.libraryKey).toBe("remada-unilateral");
+    await s.step({ type: "exercise.update", id, fields: { name: "Remada na máquina", muscleGroup: "Costas", loadType: "external", libraryKey: "remada-maquina" } });
+    await s.step({ type: "exercise.update", id, fields: { name: "Remada do meu jeito", muscleGroup: "Costas", loadType: "external" } });
+    expect(s.state.exercises.find((e) => e.id === id)).not.toHaveProperty("libraryKey");
+  });
+
+  it("contas novas nascem com os exercícios iniciais vinculados a chaves que EXISTEM na biblioteca do app", async () => {
+    const s = await Scenario.start();
+    expect(s.base.exercises.length).toBeGreaterThan(0);
+    for (const exercise of s.base.exercises) {
+      expect(exercise.libraryKey && isLibraryKey(exercise.libraryKey), exercise.name).toBe(true);
+      // o tipo de carga semeado bate com o da biblioteca
+      expect(libraryEntry(exercise.libraryKey)?.loadType, exercise.name).toBe(exercise.loadType);
+    }
   });
 
   it("matérias: nome repetido, editar (omitir o objetivo o limpa), arquivar e desarquivar", async () => {
@@ -653,6 +688,189 @@ describe("paridade — água", () => {
     const before = JSON.stringify({ ...s.state, waterIntakes: [] });
     await s.step(addWater({ id: uid(), at: NOON, ml: 500 }));
     expect(JSON.stringify({ ...s.state, waterIntakes: [] })).toBe(before);
+  });
+});
+
+describe("paridade — plano de treino", () => {
+  const NOW = Date.UTC(2026, 9, 28, 15, 0);
+  const PROFILE: TrainingProfile = {
+    goal: "massa",
+    experience: "intermediario",
+    daysPerWeek: 4,
+    sessionMinutes: 60,
+    location: "academia",
+    limitations: ["joelho"],
+    screening: "liberado",
+    healthConsentAt: NOW - 60_000,
+    priorities: ["costas"],
+    notes: "Treino de manhã",
+    updatedAt: NOW,
+  };
+  const save = (profile: TrainingProfile): Command => ({ type: "training.saveProfile", profile });
+
+  it("respostas: salvar, substituir, normalizar (listas, texto) e pular a parte de saúde", async () => {
+    const s = await Scenario.start();
+    await s.step(save(PROFILE));
+    expect(s.state.trainingProfile).toEqual(PROFILE);
+
+    // Repetições, ordem trocada, mais de 2 prioridades e espaços sobrando: o banco guarda igual ao reducer.
+    await s.step(save({ ...PROFILE, limitations: ["joelho", "ombro", "joelho"], priorities: ["pernas", "peito", "costas"], notes: "  de  manhã  ", updatedAt: NOW + 1 }));
+    expect(s.state.trainingProfile).toMatchObject({ limitations: ["ombro", "joelho"], priorities: ["peito", "costas"], notes: "de manhã" });
+
+    // Pulou a parte de saúde: limitações e consentimento não ficam guardados, mesmo que tenham vindo.
+    await s.step(save({ ...PROFILE, screening: "nao-respondida", notes: "   ", updatedAt: NOW + 2 }));
+    expect(s.state.trainingProfile).toEqual({ ...PROFILE, screening: "nao-respondida", limitations: [], healthConsentAt: undefined, notes: undefined, updatedAt: NOW + 2 } satisfies TrainingProfile);
+    expect(s.state.trainingProfile).not.toHaveProperty("healthConsentAt");
+    expect(s.state.trainingProfile).not.toHaveProperty("notes");
+  });
+
+  it("respondeu a parte de saúde sem consentimento: a MESMA recusa, sem alterar o que já estava salvo", async () => {
+    const s = await Scenario.start();
+    await s.step(save(PROFILE));
+    const { healthConsentAt: _consent, ...withoutConsent } = PROFILE;
+    void _consent;
+    const result = await s.step(save({ ...withoutConsent, updatedAt: NOW + 5 }));
+    expect(result.error).toBe("Confirme o consentimento antes das perguntas de saúde.");
+    expect(s.state.trainingProfile).toEqual(PROFILE);
+  });
+
+  it("aceitar: cria só os exercícios que faltam, as fichas, arquiva as escolhidas e guarda o plano; repetir não faz nada", async () => {
+    const s = await Scenario.start();
+    const oldPlan = uid();
+    const bench = s.exercise("Supino reto");
+    await s.step({ type: "plan.save", plan: { id: oldPlan, name: "Treino antigo", exercises: [{ exerciseId: bench.id, plannedSets: 3, repMin: 8, repMax: 12, restSeconds: 90 }] } });
+
+    const proposal = rulesProposal(PROFILE, s.state.exercises, uid(), NOW);
+    const command = buildApplyPlan({ proposal, profile: PROFILE, exercises: s.state.exercises, plans: s.state.plans, archivePlanIds: [oldPlan], nowMs: NOW, newId: uid });
+    expect(command.exercises.length).toBeGreaterThan(0); // o plano usa exercícios que a conta nova ainda não tem
+    expect(command.exercises.length).toBeLessThan(Object.keys(proposal.choices).length); // e reaproveita os que ela tem
+
+    await s.step(command);
+    expect(s.state.trainingPlans).toHaveLength(1);
+    expect(s.state.plans.find((p) => p.id === oldPlan)?.archived).toBe(true);
+    expect(s.state.plans.filter((p) => !p.archived).map((p) => p.name)).toEqual(["Superior A", "Inferior A", "Superior B", "Inferior B"]);
+
+    await s.step(command); // toque duplo / resposta perdida: nada muda
+    await s.step({ ...command, plans: command.plans.map((p) => ({ ...p, name: "Outro" })) }); // mesmo id do plano: o primeiro vale
+    expect(s.state.trainingPlans).toHaveLength(1);
+    expect(s.state.plans).toHaveLength(5);
+  });
+
+  it("é atômico: um passo que falha (ficha com exercício inexistente) desfaz tudo, com a mesma mensagem", async () => {
+    const s = await Scenario.start();
+    const proposal = rulesProposal(PROFILE, s.state.exercises, uid(), NOW);
+    const command = buildApplyPlan({ proposal, profile: PROFILE, exercises: s.state.exercises, plans: s.state.plans, archivePlanIds: [], nowMs: NOW, newId: uid });
+    const ghost = uid();
+    const broken = {
+      ...command,
+      plans: command.plans.map((p, i) => (i === 1 ? { ...p, exercises: [...p.exercises, { exerciseId: ghost, plannedSets: 3, repMin: 8, repMax: 12, restSeconds: 60 }] } : p)),
+      record: { ...command.record, days: command.record.days.map((d, i) => (i === 1 ? { ...d, exercises: [...d.exercises, { exerciseId: ghost, libraryKey: "leg-press" }] } : d)) },
+    };
+    const result = await s.step(broken);
+    expect(result.error).toBe("Exercício não encontrado.");
+    expect(s.state.exercises).toHaveLength(s.base.exercises.length); // nem os exercícios do 1º passo ficaram
+    expect(s.state.plans).toHaveLength(0);
+    expect(s.state.trainingPlans).toHaveLength(0);
+  });
+
+  it("registro que não descreve as fichas do comando é recusado com a mesma mensagem", async () => {
+    const s = await Scenario.start();
+    const proposal = rulesProposal(PROFILE, s.state.exercises, uid(), NOW);
+    const command = buildApplyPlan({ proposal, profile: PROFILE, exercises: s.state.exercises, plans: s.state.plans, archivePlanIds: [], nowMs: NOW, newId: uid });
+    const swappedDays = { ...command, record: { ...command.record, days: [...command.record.days].reverse() } };
+    expect((await s.step(swappedDays)).error).toBe("Plano inconsistente com as fichas.");
+    const archivesNew = { ...command, archivePlanIds: [command.plans[0].id] };
+    expect((await s.step(archivesNew)).error).toBe("Plano inconsistente com as fichas.");
+    const otherExercises = {
+      ...command,
+      record: { ...command.record, days: command.record.days.map((d, i) => (i === 0 ? { ...d, exercises: d.exercises.slice(1) } : d)) },
+    };
+    expect((await s.step(otherExercises)).error).toBe("Plano inconsistente com as fichas.");
+    expect(s.state.trainingPlans).toHaveLength(0);
+  });
+});
+
+describe("paridade — ajustes no plano em uso", () => {
+  const NOW = Date.UTC(2026, 10, 8, 15, 0);
+  const PROFILE: TrainingProfile = {
+    goal: "massa",
+    experience: "intermediario",
+    daysPerWeek: 4,
+    sessionMinutes: 60,
+    location: "academia",
+    limitations: [],
+    screening: "liberado",
+    healthConsentAt: NOW - 60_000,
+    priorities: [],
+    updatedAt: NOW,
+  };
+  const nameOf = (key: string) => libraryEntry(key)?.name ?? key;
+
+  async function withPlan() {
+    const s = await Scenario.start();
+    await s.step({ type: "training.saveProfile", profile: PROFILE });
+    const proposal = rulesProposal(PROFILE, s.state.exercises, uid(), NOW);
+    await s.step(buildApplyPlan({ proposal, profile: PROFILE, exercises: s.state.exercises, plans: s.state.plans, archivePlanIds: [], nowMs: NOW, newId: uid }));
+    const view = currentPlanView(s.state.trainingPlans[0], s.state, uid())!;
+    return { s, view };
+  }
+
+  it("chip e troca: grava as fichas, cria o exercício que faltava e guarda o histórico; repetir não duplica", async () => {
+    const { s, view } = await withPlan();
+    const short = buildAdjustPlan({
+      view, changes: ruleSuggestions(view.proposal, "mais-curto"), trigger: "mais-curto", source: "rules", promptVersion: ADJUST_RULES_VERSION,
+      exercises: s.state.exercises, nameOf, nowMs: NOW + 60_000, newId: uid,
+    })!;
+    await s.step(short);
+    await s.step(short); // toque duplo / resposta perdida
+    expect(s.state.trainingPlanChanges).toHaveLength(1);
+
+    const after = currentPlanView(s.state.trainingPlans[0], s.state, uid())!;
+    const slot = after.proposal.skeleton.days[0].slots[0];
+    const option = swapOptions(after.proposal.skeleton, after.proposal.choices, slot.id).find((k) => !s.state.exercises.some((e) => e.libraryKey === k))!;
+    const swap = buildAdjustPlan({
+      view: after, changes: [{ change: { kind: "swap", slotId: slot.id, exerciseKey: option }, reason: "Preferência sua.", principle: "variacao" }],
+      trigger: "troca", source: "ai", model: "fake", promptVersion: "ajuste-v1", exercises: s.state.exercises, nameOf, nowMs: NOW + 120_000, newId: uid,
+    })!;
+    expect(swap.exercises).toHaveLength(1);
+    await s.step(swap);
+    expect(s.state.trainingPlanChanges.map((c) => c.trigger)).toEqual(["mais-curto", "troca"]);
+    expect(s.state.trainingPlanChanges[1]).toMatchObject({ source: "ai", model: "fake" });
+  });
+
+  it("foco: sobe séries, ACRESCENTA exercício da biblioteca e tira o que não cabia; o banco chega ao mesmo estado (e o histórico cabe no limite)", async () => {
+    const { s, view } = await withPlan();
+    const { changes } = focusAdjustment(view.proposal, view.profile, s.state.exercises, "peito");
+    expect(changes.some((c) => c.change.kind === "add") || changes.some((c) => c.change.kind === "sets")).toBe(true);
+    const command = buildAdjustPlan({
+      view, changes, trigger: "foco", source: "rules", promptVersion: ADJUST_RULES_VERSION,
+      exercises: s.state.exercises, nameOf, nowMs: NOW + 60_000, newId: uid,
+    })!;
+    expect(command.change.items.length).toBeLessThanOrEqual(16);
+    const before = s.state.plans.reduce((t, p) => t + p.exercises.length, 0);
+    await s.step(command);
+    await s.step(command); // resposta perdida: nada muda
+    const after = s.state.plans.reduce((t, p) => t + p.exercises.length, 0);
+    const adds = changes.filter((c) => c.change.kind === "add").length;
+    const removes = changes.filter((c) => c.change.kind === "remove").length;
+    expect(after).toBe(before + adds - removes);
+    expect(s.state.trainingPlanChanges).toHaveLength(1);
+    expect(s.state.trainingPlanChanges[0].trigger).toBe("foco");
+  });
+
+  it("ficha de fora do plano, plano que não existe e exercício inexistente: a MESMA recusa, sem gravar nada", async () => {
+    const { s, view } = await withPlan();
+    const command = buildAdjustPlan({
+      view, changes: ruleSuggestions(view.proposal, "mais-curto"), trigger: "mais-curto", source: "rules", promptVersion: ADJUST_RULES_VERSION,
+      exercises: s.state.exercises, nameOf, nowMs: NOW + 60_000, newId: uid,
+    })!;
+    const other = uid();
+    await s.step({ type: "plan.save", plan: { id: other, name: "Avulsa", exercises: [] } });
+    expect((await s.step({ ...command, change: { ...command.change, planRecordId: uid() } })).error).toBe("Plano de treino não encontrado.");
+    expect((await s.step({ ...command, plans: [...command.plans, { id: other, name: "Avulsa", exercises: [] }] })).error).toBe("Ajuste inconsistente com o plano.");
+    const ghost = { ...command, plans: command.plans.map((p, i) => (i === 0 ? { ...p, exercises: [...p.exercises, { exerciseId: uid(), plannedSets: 3, repMin: 8, repMax: 12, restSeconds: 60 }] } : p)) };
+    expect((await s.step(ghost)).error).toBe("Exercício não encontrado.");
+    expect(s.state.trainingPlanChanges).toHaveLength(0);
   });
 });
 

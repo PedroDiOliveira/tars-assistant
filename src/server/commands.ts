@@ -3,7 +3,7 @@ import type { Command, Outcome } from "@/domain/commands";
 import { parseCommand } from "@/domain/command-schema";
 import { fail, ok, type Result } from "@/data/contract";
 import { translateDbError, type DbError } from "./db-errors";
-import { parseSnapshot, type Snapshot } from "./snapshot";
+import { parseSnapshot, SNAPSHOT_SCHEMA_VERSION, type Snapshot } from "./snapshot";
 
 /** O que usamos de `supabase.rpc`: facilita trocar por um banco de teste. */
 export interface RpcClient {
@@ -42,12 +42,18 @@ export async function executeCommand(client: RpcClient, raw: unknown): Promise<R
 const SNAPSHOT_MIGRATIONS = [
   { key: "runningSessions", label: "Corrida", migration: "20261014000013_running" },
   { key: "waterIntakes", label: "Água", migration: "20261014000015_water" },
+  // Daqui em diante o snapshot declara a versão do esquema: também pega campos novos DENTRO de registros, que um
+  // banco antigo ignoraria em silêncio ao gravar.
+  { version: 16, label: "Treino (como foi e biblioteca)", migration: "20261028000016_training_foundation" },
+  { version: 17, label: "Plano de treino", migration: "20261028000017_training_plan" },
+  { version: SNAPSHOT_SCHEMA_VERSION, label: "Ajustes no plano de treino", migration: "20261108000018_training_plan_changes" },
 ] as const;
 
 /** A migração mais antiga ainda não aplicada, ou null se o snapshot não é "o de antes de uma migração". */
 function missingMigration(data: unknown): (typeof SNAPSHOT_MIGRATIONS)[number] | null {
   if (typeof data !== "object" || data === null || !("serverNow" in data) || !("categories" in data)) return null;
-  return SNAPSHOT_MIGRATIONS.find((m) => !(m.key in data)) ?? null;
+  const version = "schemaVersion" in data && typeof data.schemaVersion === "number" ? data.schemaVersion : 0;
+  return SNAPSHOT_MIGRATIONS.find((m) => ("key" in m ? !(m.key in data) : version < m.version)) ?? null;
 }
 
 /** Lê o snapshot completo do usuário (uma ida ao banco) e valida o formato. */

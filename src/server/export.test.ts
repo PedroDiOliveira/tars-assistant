@@ -17,12 +17,12 @@ describe("buildExport", () => {
     expect(JSON.parse(JSON.stringify(file, null, 2)).data).toEqual(JSON.parse(JSON.stringify(snapshot.data)));
   });
 
-  it("inclui as corridas (distância em metros; ausente quando não informada) e a versão do formato é 3", () => {
-    expect(EXPORT_VERSION).toBe(3);
+  it("inclui as corridas (distância em metros; ausente quando não informada) e a versão do formato é 6", () => {
+    expect(EXPORT_VERSION).toBe(6);
     const file = buildExport(snapshot, new Date());
     expect(file.data.runningSessions.length).toBeGreaterThanOrEqual(3);
     const parsed = JSON.parse(JSON.stringify(file)) as typeof file;
-    expect(parsed.version).toBe(3);
+    expect(parsed.version).toBe(6);
     expect(parsed.data.runningSessions).toEqual(snapshot.data.runningSessions);
     const withoutDistance = parsed.data.runningSessions.find((r) => r.id === "run3");
     expect(withoutDistance).toEqual({ id: "run3", occurredOn: "2026-10-07", notes: "Esqueci o relógio" });
@@ -43,6 +43,68 @@ describe("buildExport", () => {
     const parsed = JSON.parse(JSON.stringify(buildExport(withWater, new Date()))) as ReturnType<typeof buildExport>;
     expect(parsed.data.waterIntakes).toEqual(withWater.data.waterIntakes);
     expect(parsed.data.goals).toContainEqual({ id: "g-w", kind: "water_ml", scopeId: null, validFrom: "2026-10-05", target: 2500 });
+  });
+
+  it("v4: inclui o \"como foi?\" das sessões e o vínculo dos exercícios com a biblioteca (ausentes quando não há)", () => {
+    const base = sampleData();
+    const [first, ...rest] = base.sessions;
+    const [exercise, ...others] = base.exercises;
+    const data = {
+      ...base,
+      sessions: [{ ...first, effort: 3 as const }, ...rest],
+      exercises: [{ ...exercise, libraryKey: "supino-reto-barra" }, ...others],
+    };
+    const parsed = JSON.parse(JSON.stringify(buildExport({ ...snapshot, data }, new Date()))) as ReturnType<typeof buildExport>;
+    expect(parsed.data.sessions[0].effort).toBe(3);
+    expect(parsed.data.exercises[0].libraryKey).toBe("supino-reto-barra");
+    for (const session of parsed.data.sessions.slice(1)) expect(session).not.toHaveProperty("effort");
+  });
+
+  it("v5/v6: inclui as respostas do plano de treino, os planos aceitos (com os motivos) e os ajustes", () => {
+    const data = {
+      ...sampleData(),
+      trainingProfile: {
+        goal: "massa" as const,
+        experience: "intermediario" as const,
+        daysPerWeek: 4 as const,
+        sessionMinutes: 60 as const,
+        location: "academia" as const,
+        limitations: [],
+        screening: "nao-respondida" as const,
+        priorities: [],
+        updatedAt: 1_760_000_000_000,
+      },
+      trainingPlans: [
+        {
+          id: "tp1",
+          acceptedAt: 1_760_000_100_000,
+          source: "ai" as const,
+          model: "openai/gpt-oss-20b",
+          promptVersion: "plano-v1/regras-v1",
+          split: "superior-inferior" as const,
+          summary: "Superior e inferior alternados.",
+          answers: { goal: "massa" as const, experience: "intermediario" as const, daysPerWeek: 4 as const, sessionMinutes: 60 as const, location: "academia" as const, priorities: [] },
+          days: [{ planId: "p1", name: "Superior A", exercises: [{ exerciseId: "e1", libraryKey: "supino-reto-barra", reason: "Você já faz e está evoluindo." }] }],
+          edits: 0,
+        },
+      ],
+      trainingPlanChanges: [
+        {
+          id: "tc1",
+          planRecordId: "tp1",
+          createdAt: 1_760_000_200_000,
+          source: "rules" as const,
+          trigger: "mais-curto" as const,
+          promptVersion: "ajuste-regras-v1",
+          items: [{ planId: "p1", where: "Superior A · Tríceps", before: "3 séries", after: "2 séries", reason: "Treino mais curto.", principle: "volume" }],
+        },
+      ],
+    };
+    const parsed = JSON.parse(JSON.stringify(buildExport({ ...snapshot, data }, new Date()))) as ReturnType<typeof buildExport>;
+    expect(parsed.version).toBe(6);
+    expect(parsed.data.trainingProfile).toEqual(data.trainingProfile);
+    expect(parsed.data.trainingPlans).toEqual(data.trainingPlans);
+    expect(parsed.data.trainingPlanChanges).toEqual(data.trainingPlanChanges);
   });
 
   it("inclui os itens arquivados (backup completo)", () => {

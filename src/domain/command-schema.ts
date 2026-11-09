@@ -1,9 +1,26 @@
 import { z } from "zod";
 import { isValidDateKey, weekStart } from "@/lib/dates";
 import type { Command } from "./commands";
+import { isLibraryKey } from "./exercise-library";
+import { PRINCIPLE_IDS } from "./training-evidence";
+import { SPLIT_OPTION_IDS } from "./training-splits";
 import { GOAL_PERIOD } from "./goals";
 import { MAX_DISTANCE_METERS, MAX_RUN_NOTES, MAX_RUN_SECONDS, MAX_WEEKLY_GOAL_METERS, formatDistance } from "./running";
 import { MAX_SESSION_SECONDS, MIN_TIMER_SECONDS } from "./studies";
+import {
+  BODY_REGIONS,
+  HEALTH_SCREENINGS,
+  MAX_PROFILE_NOTES,
+  normalizeProfile,
+  PRIORITY_GROUPS,
+  profileError,
+  SESSION_MINUTES,
+  TRAINING_DAYS,
+  TRAINING_EXPERIENCES,
+  TRAINING_GOALS,
+  TRAINING_LOCATIONS,
+  TRAINING_SPLITS,
+} from "./training-profile";
 import { INVALID_WATER_ML, MAX_DAILY_GOAL_ML, MAX_WATER_ML, formatLiters } from "./water";
 
 /**
@@ -124,6 +141,7 @@ const workoutSession = obj({
   finishedAt: epochMs,
   occurredOn: dateKey,
   notes: text(500, "Observações").optional(),
+  effort: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)], { error: "Avaliação do treino inválida." }).optional(),
   exercises: z.array(sessionExercise).min(1, { error: "Conclua ao menos uma série para salvar o treino." }).max(40),
 }).refine((s) => s.finishedAt >= s.startedAt, { error: "O treino não pode terminar antes de começar." });
 
@@ -217,6 +235,8 @@ const exerciseFields = obj({
   name: name(60, "Exercício"),
   muscleGroup: name(30, "Grupo muscular"),
   loadType,
+  // Só chaves que existem na biblioteca desta versão do app (o banco confere só o formato).
+  libraryKey: z.string().refine(isLibraryKey, { error: "Exercício da biblioteca desconhecido." }).optional(),
 });
 
 const exercise = obj({ id: uuid, ...exerciseFields.shape });
@@ -236,6 +256,82 @@ const plan = obj({
   exercises: z.array(planExercise).min(1, { error: "Adicione ao menos um exercício à ficha." }).max(30, { error: "No máximo 30 exercícios por ficha." }),
 }).refine((p) => new Set(p.exercises.map((e) => e.exerciseId)).size === p.exercises.length, {
   error: "Há exercícios repetidos na ficha.",
+});
+
+/* plano de treino: os mesmos valores aceitos pelas restrições da migração 17 */
+const trainingAnswers = {
+  goal: z.enum(TRAINING_GOALS),
+  experience: z.enum(TRAINING_EXPERIENCES),
+  daysPerWeek: z.literal(TRAINING_DAYS),
+  sessionMinutes: z.literal(SESSION_MINUTES),
+  location: z.enum(TRAINING_LOCATIONS),
+  priorities: z.array(z.enum(PRIORITY_GROUPS)).max(PRIORITY_GROUPS.length),
+};
+
+// Normaliza antes de validar (e de chegar ao banco): listas sem repetição e em ordem fixa, texto sem espaço sobrando.
+const trainingProfile = obj({
+  ...trainingAnswers,
+  limitations: z.array(z.enum(BODY_REGIONS)).max(BODY_REGIONS.length),
+  screening: z.enum(HEALTH_SCREENINGS),
+  healthConsentAt: epochMs.optional(),
+  notes: text(MAX_PROFILE_NOTES, "Algo mais").optional(),
+  updatedAt: epochMs,
+})
+  .transform(normalizeProfile)
+  .superRefine((profile, ctx) => {
+    const error = profileError(profile);
+    if (error) ctx.addIssue({ code: "custom", message: error });
+  });
+
+const libraryKey = z.string().refine(isLibraryKey, { error: "Exercício da biblioteca desconhecido." });
+
+const trainingPlanRecord = obj({
+  id: uuid,
+  acceptedAt: epochMs,
+  source: z.enum(["ai", "rules"]),
+  model: text(100, "Modelo").optional(),
+  promptVersion: name(40, "Versão"),
+  split: z.enum(TRAINING_SPLITS),
+  summary: name(600, "Resumo do plano"),
+  answers: obj(trainingAnswers),
+  days: z
+    .array(
+      obj({
+        planId: uuid,
+        name: name(60, "Ficha"),
+        exercises: z
+          .array(obj({ exerciseId: uuid, libraryKey, reason: text(200, "Motivo").optional(), swapped: z.literal(true).optional() }))
+          .min(1)
+          .max(30),
+      }),
+    )
+    .min(1)
+    .max(6),
+  edits: z.number().int().min(0).max(1000),
+  option: z.enum(SPLIT_OPTION_IDS).optional(),
+});
+
+const trainingPlanChange = obj({
+  id: uuid,
+  planRecordId: uuid,
+  createdAt: epochMs,
+  source: z.enum(["ai", "rules"]),
+  trigger: z.enum(["mais-curto", "menos-exercicios", "foco", "mais-pesado", "mais-leve", "texto", "troca", "sugestao"]),
+  model: text(100, "Modelo").optional(),
+  promptVersion: name(40, "Versão"),
+  items: z
+    .array(
+      obj({
+        planId: uuid,
+        where: name(120, "Onde"),
+        before: name(120, "Antes"),
+        after: name(120, "Depois"),
+        reason: name(200, "Motivo"),
+        principle: z.enum(PRINCIPLE_IDS),
+      }),
+    )
+    .min(1)
+    .max(16),
 });
 
 const bookFields = obj({
@@ -292,6 +388,20 @@ export const commandSchema: z.ZodType<Command> = z.discriminatedUnion("type", [
   obj({ type: z.literal("running.deleteSession"), id: uuid }),
   obj({ type: z.literal("water.add"), intake: waterIntake, nowMs: epochMs }),
   obj({ type: z.literal("water.remove"), id: uuid }),
+  obj({ type: z.literal("training.saveProfile"), profile: trainingProfile }),
+  obj({
+    type: z.literal("training.applyPlan"),
+    record: trainingPlanRecord,
+    exercises: z.array(exercise).max(60),
+    plans: z.array(plan).min(1).max(6),
+    archivePlanIds: z.array(uuid).max(200),
+  }),
+  obj({
+    type: z.literal("training.adjustPlan"),
+    change: trainingPlanChange,
+    exercises: z.array(exercise).max(12),
+    plans: z.array(plan).min(1).max(6),
+  }),
 ]);
 
 /**

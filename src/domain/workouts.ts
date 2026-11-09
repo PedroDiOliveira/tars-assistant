@@ -2,6 +2,7 @@ import { daysBetween, inPeriod, weekPeriod, type DateKey, type Period } from "@/
 import { weekDotsFromDates, type WeekDot } from "./activity";
 import type {
   Exercise,
+  SessionEffort,
   SessionExercise,
   SetLog,
   WorkoutDraft,
@@ -238,6 +239,7 @@ export function finalizeDraft(
   id: string,
   finishedAt: number,
   occurredOn: DateKey,
+  effort?: SessionEffort,
 ): WorkoutSession | null {
   const exercises = draft.exercises
     .map((e) => ({ ...e, sets: doneSets(e.sets).map((s) => ({ ...s })) }))
@@ -252,8 +254,20 @@ export function finalizeDraft(
     occurredOn,
     exercises,
     notes: draft.notes,
+    ...(effort ? { effort } : {}),
   };
 }
+
+/* ---------- "como foi?" ---------- */
+
+export const EFFORT_LEVELS: readonly SessionEffort[] = [1, 2, 3, 4];
+
+export const EFFORT_LABELS: Record<SessionEffort, string> = {
+  1: "Leve",
+  2: "Na medida",
+  3: "Pesado",
+  4: "Exaustivo",
+};
 
 /** Quando foi o último treino de uma ficha, em dias contados a partir de `today`. */
 export function daysSinceLastPlan(

@@ -36,6 +36,15 @@ const money = (s) => {
     locale: "pt-BR",
     timezoneId: "America/Sao_Paulo",
   });
+  // O indicador do Next em desenvolvimento (que cresce com avisos, como o de atualização) fica por cima da barra de
+  // "Finalizar treino". Ele não é do app: some nos testes. Erros de verdade continuam sendo pegos pelo console.
+  await context.addInitScript(() => {
+    addEventListener("DOMContentLoaded", () => {
+      const style = document.createElement("style");
+      style.textContent = "nextjs-portal { display: none !important; }";
+      document.head.append(style);
+    });
+  });
   const page = await context.newPage();
   const problems = [];
   page.on("console", (m) => {
@@ -132,9 +141,10 @@ const money = (s) => {
   await page.getByRole("button", { name: "Continuar" }).first().click();
   await page.waitForURL("**/treino/sessao");
   await page.getByRole("button", { name: "Finalizar treino" }).click();
-  await page.getByRole("alertdialog").waitFor();
-  check("Finalizar com séries pendentes pede confirmação", (await page.getByRole("alertdialog").innerText()).includes("pendentes"));
-  await page.getByRole("alertdialog").getByRole("button", { name: "Finalizar treino" }).click();
+  const finishSheet = page.getByRole("dialog", { name: "Como foi o treino?" });
+  await finishSheet.waitFor();
+  check("Finalizar pergunta como foi e avisa das séries pendentes", (await finishSheet.innerText()).includes("não serão salvas"));
+  await finishSheet.getByRole("button", { name: /^Na medida/ }).click();
   await page.waitForURL("**/treino");
   await ready();
   const weekAfter = await weekText();

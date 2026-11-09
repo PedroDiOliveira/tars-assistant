@@ -5,9 +5,10 @@ import type { StudyTimer, TxTemplate, WorkoutDraft } from "@/domain/types";
 import { answerQuestion, type AssistantReply } from "@/domain/assistant";
 import { parseDisplayName } from "@/domain/profile";
 import { parseQuickEntry } from "@/domain/quick-entry";
+import { rulesProposal } from "@/domain/training-proposal";
 import { todayKey } from "@/lib/dates";
 import { uid } from "@/lib/id";
-import { fail, ok, type AssistantApi, type Result } from "../contract";
+import { fail, ok, type AssistantApi, type Result, type TrainingPlanApi } from "../contract";
 import type { Account, DataLayer, StoreStatus } from "../layer";
 import { actions, ensureStoreReady, isStoreReady, useTarsStore } from "./store";
 
@@ -52,6 +53,9 @@ function useData(): DataSnapshot {
       readingSessions: s.readingSessions,
       runningSessions: s.runningSessions,
       waterIntakes: s.waterIntakes,
+      trainingProfile: s.trainingProfile,
+      trainingPlans: s.trainingPlans,
+      trainingPlanChanges: s.trainingPlanChanges,
     })),
   );
 }
@@ -80,6 +84,19 @@ const assistant: AssistantApi = {
   },
 };
 
+/** No demo não há IA: o plano sai do modelo pronto, com uma espera curta para a tela de "montando" aparecer. */
+const trainingPlan: TrainingPlanApi = {
+  async generate(options = {}) {
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    const { trainingProfile, exercises } = useTarsStore.getState();
+    if (!trainingProfile) return fail("Responda às perguntas do plano antes de gerar.", "validation");
+    return ok(rulesProposal(trainingProfile, exercises, uid(), Date.now(), "ai_off", options.split));
+  },
+  async adjust() {
+    return fail("No modo de demonstração não há IA. Use as opções acima.", "validation");
+  },
+};
+
 /** No demo o nome mora no store local (e no localStorage), com a mesma regra do modo real. */
 async function updateDisplayName(name: string): Promise<Result<{ displayName: string }>> {
   const parsed = parseDisplayName(name);
@@ -99,6 +116,7 @@ export const demoLayer: DataLayer = {
   useAccount,
   actions,
   assistant,
+  trainingPlan,
   // No demo "sair" só volta para a tela de entrada: os dados fictícios ficam neste navegador.
   signOut: async () => ok(),
   updateDisplayName,

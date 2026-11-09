@@ -28,9 +28,16 @@ Coloque as duas em `.env.local` (ele é ignorado pelo git). O modelo está em [.
 ## 3. Aplicar o banco
 
 ```bash
-npm run db:link      # pede a senha do banco e o "project ref" (o código curto da URL do projeto)
-npm run db:push      # aplica supabase/migrations/*.sql, em ordem
+npx supabase login                          # uma vez por máquina: abre o navegador e guarda um token
+npm run db:link -- --project-ref <REF>      # <REF> = o código curto da URL do projeto; pede a senha do banco
+npx supabase db push --dry-run              # lista o que seria aplicado, sem aplicar
+npm run db:push                             # aplica supabase/migrations/*.sql, em ordem
 ```
+
+O `link` grava o projeto em `supabase/.temp/` (fora do git), então precisa ser refeito em outra máquina ou num clone novo.
+Se o `--dry-run` listar migrações que já estão no banco (por exemplo, todas desde a `0001`), elas foram aplicadas por
+fora do CLI, que não as registrou: **não rode o `push`**, marque as que já existem com
+`npx supabase migration repair --status applied <versão>` (a versão é o número no começo do arquivo) e confira de novo.
 
 Conferir: em **Table Editor** devem aparecer `transactions`, `categories`, `goals`, `study_timers`… todas com
 o cadeado do RLS ativo.
@@ -71,6 +78,26 @@ Outro exemplo, a versão com o **nome editável** (`supabase/migrations/20261014
 - A migração só **acrescenta**: a função `set_display_name(text)`, um gatilho que valida o nome e a restrição do `UPDATE` na tabela `profiles` à coluna `display_name` (antes o cliente podia alterar qualquer coluna da própria linha, o que o app nunca precisou). Não mexe em dados: nomes que já existem continuam como estão.
 - **App novo antes da migração:** o restante do app funciona, mas salvar o nome falha com "Não foi possível salvar. Tente de novo.", porque a função ainda não existe. Aplicar a migração resolve, sem perda de dados.
 - **App antigo com a migração aplicada:** funciona normalmente; o app antigo nunca alterou o perfil.
+
+Outro exemplo, a versão do **treino com "como foi?" e biblioteca de exercícios** (`supabase/migrations/20261028000016_training_foundation.sql`), que se aplica junto com as anteriores no mesmo `npm run db:push`:
+
+- A migração só **acrescenta**: duas colunas que aceitam NULL (`exercises.library_key` e `workout_sessions.effort`, com restrições de formato e de faixa), as versões novas de `cmd_exercise_add`, `cmd_exercise_update` e `cmd_workout_finish` que gravam esses campos, a de `seed_defaults` (contas novas nascem com os exercícios iniciais vinculados à biblioteca) e a de `get_snapshot`, que passa a devolver os campos e `schemaVersion: 16`. Não mexe em dados: treinos e exercícios existentes ficam sem avaliação e sem vínculo (o vínculo se faz pela tela de editar exercício).
+- **App novo antes da migração:** o snapshot não traz `schemaVersion` e o app recusa abrir com "O banco ainda não tem a atualização de Treino (como foi e biblioteca). Aplique a migração 20261028000016_training_foundation e recarregue.". É de propósito: sem a migração, o banco antigo **ignoraria em silêncio** o "como foi?" e o vínculo ao gravar (são campos dentro de registros, não chaves novas), e o app diria que salvou.
+- **App antigo com a migração aplicada:** funciona normalmente; ele ignora `schemaVersion`, `effort` e `libraryKey`. Editar um exercício pelo app antigo apaga o vínculo dele (o formulário antigo não manda a chave), o que só tira o passo de carga da sugestão até vincular de novo.
+
+Outro exemplo, a versão do **plano de treino** (`supabase/migrations/20261028000017_training_plan.sql`):
+
+- A migração só **acrescenta**: as tabelas `training_profiles` (uma linha por pessoa, com as respostas do formulário; limitações só com o instante do consentimento, por CHECK) e `training_plans` (planos aceitos, imutáveis), as funções `cmd_training_save_profile` e `cmd_training_apply_plan`, e as versões novas de `apply_command` e `get_snapshot` (que passa a devolver `trainingProfile`, `trainingPlans` e `schemaVersion: 17`). Não mexe em dados existentes.
+- **App novo antes da migração:** o snapshot traz `schemaVersion: 16` e o app recusa abrir com "O banco ainda não tem a atualização de Plano de treino. Aplique a migração 20261028000017_training_plan e recarregue.".
+- **App antigo com a migração aplicada:** funciona normalmente; ele ignora as chaves novas do snapshot.
+- Opcional: `AI_PLAN_MODEL` na Vercel para gerar o plano com outro modelo (ex.: `openai/gpt-oss-120b`), sem mexer no do chat. Sem ela, vale o `AI_MODEL`.
+
+E a versão dos **ajustes no plano em uso** (`supabase/migrations/20261108000018_training_plan_changes.sql`):
+
+- A migração só **acrescenta**: a tabela `training_plan_changes` (um ajuste aceito por linha, imutável, ligado ao plano aceito e apagado junto com ele; o texto livre da pessoa nunca chega aqui), a função `cmd_training_adjust_plan` e as versões novas de `apply_command` e `get_snapshot` (que passa a devolver `trainingPlanChanges` e `schemaVersion: 18`). Não mexe em dados existentes.
+- **App novo antes da migração:** o app recusa abrir com "O banco ainda não tem a atualização de Ajustes no plano de treino. Aplique a migração 20261108000018_training_plan_changes e recarregue.".
+- **App antigo com a migração aplicada:** funciona normalmente; ele ignora a chave nova do snapshot.
+- Rota nova, sem variável nova: `POST /api/training/plan/adjust` (sugestões da IA para o rascunho e para o plano em uso) usa o mesmo provedor e os mesmos limites da geração do plano.
 
 ## 4. Criar o seu usuário e fechar o cadastro
 

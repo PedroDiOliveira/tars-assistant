@@ -1,5 +1,6 @@
 "use client";
 
+import { ASSISTANT } from "@/lib/constants";
 import Link from "next/link";
 import { Sparkles, Wind } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
@@ -38,7 +39,7 @@ export function AppHeader() {
         {aiEnabled ? (
           <Link
             href="/assistente"
-            aria-label="Abrir assistente"
+            aria-label={`Abrir ${ASSISTANT.the}`}
             className="grid size-11 place-items-center rounded-full text-foreground/70 transition active:bg-muted"
           >
             <Sparkles className="size-5" aria-hidden />

@@ -49,6 +49,16 @@ const request = (over: object = {}) => ({
 });
 
 describe("requisição enviada ao provedor", () => {
+  it("saída estruturada: manda o schema como json_schema estrito e, sem ferramentas, nem `tools` nem `tool_choice`", async () => {
+    respond = ok({ content: "{}" });
+    const schema = { type: "object", additionalProperties: false, required: ["a"], properties: { a: { type: "string", enum: ["x"] } } };
+    await provider().chat(request({ tools: [], responseFormat: { name: "plano", schema } }));
+    const [sent] = requests;
+    expect(sent.body.response_format).toEqual({ type: "json_schema", json_schema: { name: "plano", strict: true, schema } });
+    expect(sent.body).not.toHaveProperty("tools");
+    expect(sent.body).not.toHaveProperty("tool_choice");
+  });
+
   it("usa POST /chat/completions com a chave no cabeçalho e o formato de ferramentas da OpenAI", async () => {
     respond = ok({ content: "olá" });
     await provider().chat(request());
@@ -133,7 +143,7 @@ describe("resposta", () => {
 });
 
 describe("erros: classificados, sem retry e sem vazar segredo", () => {
-  const cases: [number, string][] = [[401, "unauthorized"], [403, "unauthorized"], [402, "rate_limited"], [429, "rate_limited"], [408, "timeout"], [504, "timeout"], [500, "unavailable"], [503, "unavailable"], [400, "bad_response"], [404, "bad_response"]];
+  const cases: [number, string][] = [[401, "unauthorized"], [403, "unauthorized"], [402, "rate_limited"], [413, "rate_limited"], [429, "rate_limited"], [408, "timeout"], [504, "timeout"], [500, "unavailable"], [503, "unavailable"], [400, "bad_response"], [404, "bad_response"]];
   it.each(cases)("HTTP %i vira %s", async (status, kind) => {
     respond = (res) => json(res, status, { error: `detalhe interno com ${SECRET} e a pergunta do usuário` });
     const error = await provider().chat(request()).catch((e) => e);

@@ -165,6 +165,27 @@ describe("treino", () => {
       "select plan_id, user_id, name_snapshot from public.workout_sessions where id = $1", [session]);
     expect(row).toEqual({ plan_id: null, user_id: U, name_snapshot: "Treino X" });
   });
+  it("o \"como foi?\" vai de 1 a 4, e é opcional", async () => {
+    const insert = (effort: number | null) =>
+      run(
+        `insert into public.workout_sessions (id, name_snapshot, started_at, finished_at, occurred_on, effort)
+         values ($1, 'X', now() - interval '1 hour', now(), '2026-10-07', $2)`, [uid(), effort]);
+    expect(await insert(0)).toBe("23514");
+    expect(await insert(5)).toBe("23514");
+    expect(await insert(1)).toBeUndefined();
+    expect(await insert(4)).toBeUndefined();
+    expect(await insert(null)).toBeUndefined();
+  });
+  it("vínculo com a biblioteca: só chaves bem formadas (o banco não conhece a lista)", async () => {
+    const insert = (key: string | null) =>
+      run("insert into public.exercises (id, name, muscle_group, load_type, library_key) values ($1, $2, 'Peito', 'external', $3)",
+        [uid(), `Exercício ${uid()}`, key]);
+    for (const bad of ["", "Supino", "supino reto", "supino--reto", "-supino", "supino_reto", "a".repeat(61)]) {
+      expect(await insert(bad), bad).toBe("23514");
+    }
+    expect(await insert("chave-que-o-app-ainda-nao-conhece")).toBeUndefined();
+    expect(await insert(null)).toBeUndefined();
+  });
   it("sessão não termina antes de começar", async () => {
     expect(await run(
       `insert into public.workout_sessions (id, name_snapshot, started_at, finished_at, occurred_on)

@@ -1,10 +1,13 @@
+import { buildAdjustPlan } from "@/domain/training-current";
 import { dateKeyFromInstant } from "@/lib/dates";
 import { greenHue } from "@/lib/hues";
 import type { Command, Outcome } from "@/domain/commands";
 import type { AppData } from "@/domain/snapshot";
+import { buildApplyPlan } from "@/domain/training-proposal";
 import type { Subject, WorkoutDraft } from "@/domain/types";
 import { finalizeDraft } from "@/domain/workouts";
 import {
+  fail,
   ok,
   type DataActions,
   type FinishStudyOutcome,
@@ -67,12 +70,12 @@ export function createDataActions(host: ActionHost): DataActions {
     setGoal: (input) => send({ type: "goal.set", goal: { id: host.newId(), ...input } }),
 
     /* ---------- treino ---------- */
-    finishWorkout: () =>
+    finishWorkout: (effort) =>
       once<Result<FinishWorkoutOutcome>>("workout.finish", ok("none"), async () => {
         const { draft } = host.read();
         if (!draft) return ok("none");
         // O id vem do rascunho: reenviar (toque duplo, nova tentativa) é a mesma sessão, nunca outra.
-        const session = finalizeDraft(draft, draft.id, host.now(), dateKeyFromInstant(draft.startedAt));
+        const session = finalizeDraft(draft, draft.id, host.now(), dateKeyFromInstant(draft.startedAt), effort);
         if (!session) return ok("empty");
         const sent = await host.dispatch({ type: "workout.finish", session });
         if (!sent.ok) return sent; // falhou: o rascunho fica, para tentar de novo sem perder o treino
@@ -170,5 +173,46 @@ export function createDataActions(host: ActionHost): DataActions {
       return sent.ok ? ok({ id }) : sent;
     },
     removeWater: (id) => send({ type: "water.remove", id }),
+
+    /* ---------- plano de treino ---------- */
+    saveTrainingProfile: (input) => send({ type: "training.saveProfile", profile: { ...input, updatedAt: host.now() } }),
+    // Toque duplo em "Usar este plano" não pode criar as fichas duas vezes (o comando também é idempotente pelo id).
+    applyTrainingPlan: ({ proposal, archivePlanIds }) =>
+      once("training.applyPlan", fail("Já estou salvando o plano.", "unknown"), async () => {
+        const { data } = host.read();
+        const profile = data.trainingProfile;
+        if (!profile || profile.updatedAt !== proposal.profileUpdatedAt) {
+          return fail("Suas respostas mudaram depois deste plano. Gere um plano novo.", "validation");
+        }
+        return send(
+          buildApplyPlan({
+            proposal,
+            profile,
+            exercises: data.exercises,
+            plans: data.plans,
+            archivePlanIds,
+            nowMs: host.now(),
+            newId: host.newId,
+          }),
+        );
+      }),
+    // Toque duplo em "Aplicar" não grava o ajuste duas vezes (o comando também é idempotente pelo id).
+    adjustTrainingPlan: ({ view, changes, trigger, source, model, promptVersion, nameOf }) =>
+      once("training.adjustPlan", fail("Já estou salvando o ajuste.", "unknown"), async () => {
+        const command = buildAdjustPlan({
+          view,
+          changes,
+          trigger,
+          source,
+          model,
+          promptVersion,
+          exercises: host.read().data.exercises,
+          nameOf,
+          nowMs: host.now(),
+          newId: host.newId,
+        });
+        if (!command) return fail("Essas mudanças não valem mais nas suas fichas. Abra o ajuste de novo.", "validation");
+        return send(command);
+      }),
   };
 }

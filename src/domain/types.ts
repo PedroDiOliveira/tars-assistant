@@ -65,6 +65,8 @@ export interface Exercise {
   muscleGroup: string;
   /** peso corporal tem carga externa 0 e não entra no cálculo de volume */
   loadType: "external" | "bodyweight";
+  /** vínculo opcional com a biblioteca (domain/exercise-library.ts): equipamento, músculos e padrão de movimento */
+  libraryKey?: string;
   /** arquivado: some das listas de escolha, mas continua dando nome ao histórico que já o usa */
   archived?: boolean;
 }
@@ -114,6 +116,108 @@ export interface WorkoutSession {
   occurredOn: DateKey;
   exercises: SessionExercise[];
   notes?: string;
+  /** "Como foi?" ao finalizar (1 leve, 2 na medida, 3 pesado, 4 exaustivo); ausente = não avaliado */
+  effort?: SessionEffort;
+}
+
+export type SessionEffort = 1 | 2 | 3 | 4;
+
+/* ---------- Plano de treino (respostas do formulário e planos aceitos) ---------- */
+
+export type TrainingGoal = "massa" | "forca" | "saude" | "emagrecer";
+export type TrainingExperience = "iniciante" | "intermediario" | "avancado";
+export type TrainingLocation = "academia" | "casa-halteres";
+export type BodyRegion = "ombro" | "cotovelo" | "punho" | "lombar" | "quadril" | "joelho" | "tornozelo";
+export type PriorityGroup = "peito" | "costas" | "ombros" | "bracos" | "pernas" | "gluteos";
+/**
+ * Triagem de saúde antes do plano. Só o RESULTADO fica guardado, nunca as respostas: "liberado" (nada acusado),
+ * "liberacao-medica" (algo acusado e a pessoa confirmou ter liberação) ou "nao-respondida" (pulou a parte de saúde).
+ */
+export type HealthScreening = "liberado" | "liberacao-medica" | "nao-respondida";
+
+/** Respostas do formulário do plano: uma por pessoa, substituída a cada vez que ela refaz as perguntas. */
+export interface TrainingProfile {
+  goal: TrainingGoal;
+  experience: TrainingExperience;
+  daysPerWeek: 2 | 3 | 4 | 5 | 6;
+  sessionMinutes: 30 | 45 | 60 | 75;
+  location: TrainingLocation;
+  /** dado de saúde: só existe com consentimento (`healthConsentAt`); vazio quando ela pulou a parte de saúde */
+  limitations: BodyRegion[];
+  screening: HealthScreening;
+  /** instante do consentimento para as perguntas de saúde; ausente quando ela pulou */
+  healthConsentAt?: number;
+  /** até 2 grupos para dar mais atenção */
+  priorities: PriorityGroup[];
+  /** "Algo mais?": o único texto livre que vai para a IA */
+  notes?: string;
+  updatedAt: number;
+}
+
+/** Família da divisão do treino na semana (domain/training-splits.ts). */
+export type TrainingSplit = "corpo-inteiro" | "superior-inferior" | "superior-inferior-ppl" | "empurrar-puxar-pernas" | "por-grupo";
+
+/** Um exercício de um plano aceito: o vínculo com a ficha criada e o motivo da escolha. */
+export interface TrainingPlanExercise {
+  exerciseId: string;
+  libraryKey: string;
+  reason?: string;
+  /** trocado pela pessoa antes de aceitar */
+  swapped?: boolean;
+}
+
+/**
+ * Um plano ACEITO: de onde veio (IA ou modelo pronto), o porquê e quais fichas ele criou. A proposta em revisão vive
+ * só no aparelho; só o que a pessoa aceita chega ao banco. É a base da revisão mensal (fase 2) e das métricas.
+ */
+export interface TrainingPlanRecord {
+  id: string;
+  acceptedAt: number;
+  source: "ai" | "rules";
+  /** modelo de IA usado; ausente no modelo pronto */
+  model?: string;
+  promptVersion: string;
+  split: TrainingSplit;
+  summary: string;
+  /** as respostas usadas, SEM os dados de saúde (eles ficam só no perfil, que a pessoa pode apagar) */
+  answers: Pick<TrainingProfile, "goal" | "experience" | "daysPerWeek" | "sessionMinutes" | "location" | "priorities">;
+  days: { planId: string; name: string; exercises: TrainingPlanExercise[] }[];
+  /** quantas trocas a pessoa fez antes de aceitar */
+  edits: number;
+  /** a divisão exata do catálogo (training-splits); ausente nos planos aceitos antes do rodízio */
+  option?: string;
+}
+
+/** Gatilho de um ajuste no plano em uso: um chip, o texto livre (que NÃO é guardado), uma troca escolhida pela pessoa ou a sugestão do app. */
+export type TrainingAdjustTrigger = "mais-curto" | "menos-exercicios" | "foco" | "mais-pesado" | "mais-leve" | "texto" | "troca" | "sugestao";
+
+/** Uma mudança aplicada às fichas do plano em uso, como a pessoa a viu na prévia. */
+export interface TrainingPlanChangeItem {
+  /** a ficha alterada */
+  planId: string;
+  /** "Inferior A · Leg press" */
+  where: string;
+  before: string;
+  after: string;
+  reason: string;
+  /** id do princípio da base científica (domain/training-evidence.ts) */
+  principle: string;
+}
+
+/**
+ * Um ajuste ACEITO no plano em uso: o que mudou nas fichas, por quê e de onde veio. Imutável; é o histórico "O que
+ * mudou" e a base da revisão a cada 4 semanas (fase 2). O texto livre da pessoa nunca é guardado (pode ter dado de saúde).
+ */
+export interface TrainingPlanChange {
+  id: string;
+  planRecordId: string;
+  createdAt: number;
+  source: "ai" | "rules";
+  trigger: TrainingAdjustTrigger;
+  /** modelo de IA usado; ausente quando veio das regras */
+  model?: string;
+  promptVersion: string;
+  items: TrainingPlanChangeItem[];
 }
 
 /** Treino em andamento: vive só no aparelho até ser finalizado. */

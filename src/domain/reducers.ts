@@ -4,6 +4,7 @@ import { validateReadingSession } from "./reading";
 import { futureRunError, normalizeRunFields, RUN_NOT_FOUND } from "./running";
 import type { AppData } from "./snapshot";
 import { finishTimer, pauseTimer, resumeTimer, startTimer } from "./studies";
+import { normalizeProfile, profileError } from "./training-profile";
 import type { WorkoutPlan } from "./types";
 import { waterIntakeError } from "./water";
 
@@ -70,6 +71,34 @@ export const DUPLICATE_SUBJECT = "Já existe uma matéria com este nome.";
 const NOT_FOUND = { category: "Categoria não encontrada.", exercise: "Exercício não encontrado.", plan: "Ficha não encontrada.", subject: "Matéria não encontrada.", book: "Livro não encontrado.", session: "Sessão de leitura não encontrada." } as const;
 
 const failed = (error: string): Applied => ({ ok: false, error });
+
+/** O registro do plano precisa descrever exatamente as fichas criadas pelo mesmo comando. */
+function applyPlanError(command: Extract<Command, { type: "training.applyPlan" }>): string | null {
+  const planIds = command.plans.map((p) => p.id);
+  const recorded = command.record.days.map((d) => d.planId);
+  if (planIds.length !== recorded.length || planIds.some((id, i) => id !== recorded[i])) return "Plano inconsistente com as fichas.";
+  if (command.archivePlanIds.some((id) => planIds.includes(id))) return "Plano inconsistente com as fichas.";
+  const sameExercises = command.plans.every((plan, i) => {
+    const listed = command.record.days[i].exercises.map((e) => e.exerciseId);
+    return listed.length === plan.exercises.length && plan.exercises.every((e, j) => e.exerciseId === listed[j]);
+  });
+  return sameExercises ? null : "Plano inconsistente com as fichas.";
+}
+
+/**
+ * Um ajuste só mexe em fichas que JÁ existem e são do plano indicado; cada mudança listada aponta uma dessas fichas.
+ * Mesmas mensagens do banco.
+ */
+function adjustPlanError(data: AppData, command: Extract<Command, { type: "training.adjustPlan" }>): string | null {
+  const record = data.trainingPlans.find((r) => r.id === command.change.planRecordId);
+  if (!record) return "Plano de treino não encontrado.";
+  const own = new Set(record.days.map((d) => d.planId));
+  const saving = new Set(command.plans.map((p) => p.id));
+  const known = new Set(data.plans.map((p) => p.id));
+  if (command.plans.some((p) => !own.has(p.id) || !known.has(p.id))) return "Ajuste inconsistente com o plano.";
+  if (command.change.items.some((i) => !saving.has(i.planId))) return "Ajuste inconsistente com o plano.";
+  return null;
+}
 
 /**
  * Reducer puro: não muda `data` e deixa intactas (mesma referência) as listas que o comando não toca,
@@ -294,6 +323,50 @@ export function applyCommand(data: AppData, command: Command): Applied {
     // Remover um id que não existe não é erro (desfazer depois de uma releitura): igual ao banco.
     case "water.remove":
       return saved({ ...data, waterIntakes: removeById(data.waterIntakes, command.id) });
+
+    /* ---------- plano de treino ---------- */
+    case "training.saveProfile": {
+      const profile = normalizeProfile(command.profile);
+      const error = profileError(profile);
+      if (error) return failed(error);
+      return saved({ ...data, trainingProfile: profile });
+    }
+    case "training.applyPlan": {
+      // Já aceito (toque duplo, nova tentativa depois de uma resposta perdida): nada muda.
+      if (data.trainingPlans.some((p) => p.id === command.record.id)) return saved(data);
+      const error = applyPlanError(command);
+      if (error) return failed(error);
+      // Os mesmos passos dos comandos avulsos, na mesma ordem do banco; o primeiro que falhar desfaz tudo.
+      const steps: Command[] = [
+        ...command.exercises.map((exercise): Command => ({ type: "exercise.add", exercise })),
+        ...command.plans.map((plan): Command => ({ type: "plan.save", plan })),
+        ...command.archivePlanIds.map((id): Command => ({ type: "plan.archive", id, archived: true })),
+      ];
+      let next = data;
+      for (const step of steps) {
+        const applied = applyCommand(next, step);
+        if (!applied.ok) return applied;
+        next = applied.data;
+      }
+      return saved({ ...next, trainingPlans: [...next.trainingPlans, command.record] });
+    }
+    case "training.adjustPlan": {
+      // Já gravado (toque duplo, nova tentativa depois de uma resposta perdida): nada muda.
+      if (data.trainingPlanChanges.some((c) => c.id === command.change.id)) return saved(data);
+      const error = adjustPlanError(data, command);
+      if (error) return failed(error);
+      const steps: Command[] = [
+        ...command.exercises.map((exercise): Command => ({ type: "exercise.add", exercise })),
+        ...command.plans.map((plan): Command => ({ type: "plan.save", plan })),
+      ];
+      let next = data;
+      for (const step of steps) {
+        const applied = applyCommand(next, step);
+        if (!applied.ok) return applied;
+        next = applied.data;
+      }
+      return saved({ ...next, trainingPlanChanges: [...next.trainingPlanChanges, command.change] });
+    }
 
     default: {
       const unreachable: never = command;

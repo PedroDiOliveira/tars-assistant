@@ -1,3 +1,4 @@
+import { ASSISTANT } from "@/lib/constants";
 import { cn } from "cn";
 import { HueBubble } from "@/components/shared/hue-bubble";
 import { formatBRL } from "@/domain/money";
@@ -24,7 +25,7 @@ export function TransactionRow({ transaction, category, onSelect }: TransactionR
         <p className="truncate font-medium">{title}</p>
         <p className="truncate text-sm text-muted-foreground">
           {category?.name ?? "Sem categoria"}
-          {transaction.source === "ai" ? " · via assistente" : ""}
+          {transaction.source === "ai" ? ` · via ${ASSISTANT.name}` : ""}
         </p>
       </div>
       <p className={cn("shrink-0 font-semibold tabular-nums", income && "text-success-ink")}>

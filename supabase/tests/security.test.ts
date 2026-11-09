@@ -15,7 +15,7 @@ async function populate(userId: string) {
     "select id from public.exercises where user_id = $1 limit 1", [userId]);
   const ids = {
     category: cat.id, exercise: ex.id, tx: uid(), tpl: uid(), subject: uid(), studySession: uid(),
-    goal: uid(), plan: uid(), session: uid(), book: uid(), reading: uid(), running: uid(), water: uid(),
+    goal: uid(), plan: uid(), session: uid(), book: uid(), reading: uid(), running: uid(), water: uid(), trainingPlan: uid(),
   };
   const SE = "00000000-0000-4000-8000-0000000000aa";
   const statements: [string, unknown[]][] = [
@@ -46,6 +46,10 @@ async function populate(userId: string) {
       values ($1, $2, '2026-10-07', 5200, 1800)`, [ids.running, userId]],
     [`insert into public.water_intakes (id, user_id, occurred_at, ml)
       values ($1, $2, now(), 500)`, [ids.water, userId]],
+    [`insert into public.training_profiles (user_id, goal, experience, days_per_week, session_minutes, location, limitations, screening, health_consent_at, updated_at)
+      values ($1, 'massa', 'intermediario', 4, 60, 'academia', '{joelho}', 'liberado', now(), now())`, [userId]],
+    [`insert into public.training_plans (id, user_id, accepted_at, source, details)
+      values ($1, $2, now(), 'rules', '{"summary": "Plano"}')`, [ids.trainingPlan, userId]],
   ];
   for (const [sql, params] of statements) await t.admin(sql, params);
   return ids;
@@ -103,6 +107,7 @@ describe("isolamento entre usuários (RLS)", () => {
     "categories", "transactions", "tx_templates", "goals", "exercises", "workout_plans",
     "workout_plan_exercises", "workout_sessions", "session_exercises", "exercise_sets",
     "study_subjects", "study_sessions", "study_timers", "books", "reading_sessions", "running_sessions", "water_intakes",
+    "training_profiles", "training_plans",
   ];
 
   it.each(TABLES)("%s: B não enxerga nenhuma linha de A", async (table) => {
@@ -225,6 +230,14 @@ describe("isolamento entre usuários (RLS)", () => {
     expect(row.ml).toBe(500);
   });
 
+  it("plano aceito é imutável e as respostas do plano não se apagam por fora (sem UPDATE/DELETE)", async () => {
+    expect(await t.as(A, (s) => sqlState(s.query("update public.training_plans set source = 'ai' where id = $1", [a.trainingPlan])))).toBe("42501");
+    expect(await t.as(A, (s) => sqlState(s.query("delete from public.training_plans where id = $1", [a.trainingPlan])))).toBe("42501");
+    expect(await t.as(A, (s) => sqlState(s.query("delete from public.training_profiles")))).toBe("42501");
+    const [row] = await t.admin<{ n: number }>("select count(*)::int as n from public.training_profiles where user_id = $1", [A]);
+    expect(row.n).toBe(1);
+  });
+
   it("comando de B não afeta A: excluir o lançamento de A com o id dele não apaga nada", async () => {
     await t.as(B, (s) => s.command({ type: "transaction.delete", id: a.tx }));
     const [row] = await t.admin<{ n: number }>("select count(*)::int as n from public.transactions where id = $1", [a.tx]);
@@ -233,7 +246,7 @@ describe("isolamento entre usuários (RLS)", () => {
 });
 
 describe("sem login (papel anon)", () => {
-  it.each(["transactions", "profiles", "categories", "study_timers", "running_sessions", "water_intakes"])("não lê %s", async (table) => {
+  it.each(["transactions", "profiles", "categories", "study_timers", "running_sessions", "water_intakes", "training_profiles", "training_plans"])("não lê %s", async (table) => {
     expect(await t.anon((s) => sqlState(s.query(`select * from public.${table}`)))).toBe("42501");
   });
 
@@ -313,7 +326,7 @@ describe("permissões de execução (trava contra função nova esquecida)", () 
     // todo comando existente é executável (senão o despachante falharia só em produção)
     const allCommands = fns.filter((f) => f.name.startsWith("cmd_")).length;
     expect(commands).toHaveLength(allCommands);
-    expect(allCommands).toBeGreaterThanOrEqual(38); // 33 anteriores + 3 de corrida + 2 de água
+    expect(allCommands).toBeGreaterThanOrEqual(40); // 33 anteriores + 3 de corrida + 2 de água + 2 do plano de treino
   });
 
   it("só as funções `security definer` CONHECIDAS existem (cada uma é uma elevação de privilégio consciente)", async () => {

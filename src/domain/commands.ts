@@ -8,6 +8,9 @@ import type {
   RunningSession,
   StudySession,
   Subject,
+  TrainingPlanChange,
+  TrainingPlanRecord,
+  TrainingProfile,
   Transaction,
   TxTemplate,
   WaterIntake,
@@ -75,7 +78,31 @@ export type Command =
   /* água: cada toque é um registro com id próprio. `nowMs` só serve ao reducer para recusar horário futuro ou
      antigo demais; o banco decide pelo próprio relógio. Remover um id que não existe não é erro. */
   | { type: "water.add"; intake: WaterIntake; nowMs: number }
-  | { type: "water.remove"; id: string };
+  | { type: "water.remove"; id: string }
+  /* plano de treino */
+  /** Salva (ou substitui) as respostas do formulário do plano. */
+  | { type: "training.saveProfile"; profile: TrainingProfile }
+  /**
+   * Aceita um plano, ATÔMICO: cria os exercícios que faltam, as fichas novas, arquiva as fichas escolhidas e guarda o
+   * registro do plano. Repetir com o mesmo `record.id` não faz nada (já aceito).
+   */
+  | {
+      type: "training.applyPlan";
+      record: TrainingPlanRecord;
+      exercises: Omit<Exercise, "archived">[];
+      plans: PlanInput[];
+      archivePlanIds: string[];
+    }
+  /**
+   * Ajuste aceito no plano EM USO: grava as fichas alteradas (e os exercícios da biblioteca que faltavam) e o registro
+   * do ajuste, numa transação só. Idempotente pelo id do ajuste. Só mexe em fichas do próprio plano.
+   */
+  | {
+      type: "training.adjustPlan";
+      change: TrainingPlanChange;
+      exercises: Omit<Exercise, "archived">[];
+      plans: PlanInput[];
+    };
 
 /**
  * Campos editáveis de um registro. Atualizar SUBSTITUI todos eles (não é um patch parcial): assim "limpar a

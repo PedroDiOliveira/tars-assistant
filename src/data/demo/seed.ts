@@ -15,6 +15,7 @@ import type {
   Goal,
   ReadingSession,
   RunningSession,
+  SessionEffort,
   SessionExercise,
   StudySession,
   Subject,
@@ -58,23 +59,23 @@ export const CATEGORIES: Category[] = [
 ];
 
 export const EXERCISES: Exercise[] = [
-  { id: "ex-supino", name: "Supino reto", muscleGroup: "Peito", loadType: "external" },
-  { id: "ex-supino-inc", name: "Supino inclinado com halteres", muscleGroup: "Peito", loadType: "external" },
-  { id: "ex-crucifixo", name: "Crucifixo", muscleGroup: "Peito", loadType: "external" },
-  { id: "ex-triceps-pulley", name: "Tríceps pulley", muscleGroup: "Tríceps", loadType: "external" },
-  { id: "ex-triceps-testa", name: "Tríceps testa", muscleGroup: "Tríceps", loadType: "external" },
-  { id: "ex-barra", name: "Barra fixa", muscleGroup: "Costas", loadType: "bodyweight" },
-  { id: "ex-puxada", name: "Puxada frontal", muscleGroup: "Costas", loadType: "external" },
-  { id: "ex-remada-curvada", name: "Remada curvada", muscleGroup: "Costas", loadType: "external" },
-  { id: "ex-remada-baixa", name: "Remada baixa", muscleGroup: "Costas", loadType: "external" },
-  { id: "ex-rosca", name: "Rosca direta", muscleGroup: "Bíceps", loadType: "external" },
-  { id: "ex-martelo", name: "Rosca martelo", muscleGroup: "Bíceps", loadType: "external" },
-  { id: "ex-agachamento", name: "Agachamento livre", muscleGroup: "Pernas", loadType: "external" },
-  { id: "ex-leg", name: "Leg press", muscleGroup: "Pernas", loadType: "external" },
-  { id: "ex-flexora", name: "Mesa flexora", muscleGroup: "Pernas", loadType: "external" },
-  { id: "ex-panturrilha", name: "Panturrilha em pé", muscleGroup: "Pernas", loadType: "external" },
-  { id: "ex-desenvolvimento", name: "Desenvolvimento com halteres", muscleGroup: "Ombros", loadType: "external" },
-  { id: "ex-lateral", name: "Elevação lateral", muscleGroup: "Ombros", loadType: "external" },
+  { id: "ex-supino", name: "Supino reto", muscleGroup: "Peito", loadType: "external", libraryKey: "supino-reto-barra" },
+  { id: "ex-supino-inc", name: "Supino inclinado com halteres", muscleGroup: "Peito", loadType: "external", libraryKey: "supino-inclinado-halteres" },
+  { id: "ex-crucifixo", name: "Crucifixo", muscleGroup: "Peito", loadType: "external", libraryKey: "crucifixo-halteres" },
+  { id: "ex-triceps-pulley", name: "Tríceps pulley", muscleGroup: "Tríceps", loadType: "external", libraryKey: "triceps-pulley" },
+  { id: "ex-triceps-testa", name: "Tríceps testa", muscleGroup: "Tríceps", loadType: "external", libraryKey: "triceps-testa" },
+  { id: "ex-barra", name: "Barra fixa", muscleGroup: "Costas", loadType: "bodyweight", libraryKey: "barra-fixa" },
+  { id: "ex-puxada", name: "Puxada frontal", muscleGroup: "Costas", loadType: "external", libraryKey: "puxada-frontal" },
+  { id: "ex-remada-curvada", name: "Remada curvada", muscleGroup: "Costas", loadType: "external", libraryKey: "remada-curvada" },
+  { id: "ex-remada-baixa", name: "Remada baixa", muscleGroup: "Costas", loadType: "external", libraryKey: "remada-baixa" },
+  { id: "ex-rosca", name: "Rosca direta", muscleGroup: "Bíceps", loadType: "external", libraryKey: "rosca-direta" },
+  { id: "ex-martelo", name: "Rosca martelo", muscleGroup: "Bíceps", loadType: "external", libraryKey: "rosca-martelo" },
+  { id: "ex-agachamento", name: "Agachamento livre", muscleGroup: "Pernas", loadType: "external", libraryKey: "agachamento-livre" },
+  { id: "ex-leg", name: "Leg press", muscleGroup: "Pernas", loadType: "external", libraryKey: "leg-press" },
+  { id: "ex-flexora", name: "Mesa flexora", muscleGroup: "Pernas", loadType: "external", libraryKey: "mesa-flexora" },
+  { id: "ex-panturrilha", name: "Panturrilha em pé", muscleGroup: "Pernas", loadType: "external", libraryKey: "panturrilha-em-pe" },
+  { id: "ex-desenvolvimento", name: "Desenvolvimento com halteres", muscleGroup: "Ombros", loadType: "external", libraryKey: "desenvolvimento-halteres" },
+  { id: "ex-lateral", name: "Elevação lateral", muscleGroup: "Ombros", loadType: "external", libraryKey: "elevacao-lateral" },
 ];
 
 export const PLANS: WorkoutPlan[] = [
@@ -142,6 +143,16 @@ const BASE_WEIGHT: Record<string, number> = {
   "ex-desenvolvimento": 18,
   "ex-lateral": 8,
 };
+
+/**
+ * "Como foi?" do treino, derivado da data (e não do gerador abaixo, para não mudar a sequência dos demais dados):
+ * a maioria "na medida", alguns pesados, poucos leves ou exaustivos, e alguns sem avaliação.
+ */
+const EFFORTS: (SessionEffort | undefined)[] = [undefined, 2, 2, 3, 2, 3, 4, 1, 2, 3];
+function effortFor(date: string): { effort?: SessionEffort } {
+  const effort = EFFORTS[hashKey(`effort:${date}`) % EFFORTS.length];
+  return effort ? { effort } : {};
+}
 
 /** Gerador pseudoaleatório determinístico: o demo fica igual a cada reset no mesmo dia. */
 function mulberry32(seed: number): () => number {
@@ -313,8 +324,15 @@ export function buildSeed(today: DateKey): SeedData {
         finishedAt: startedAt + between(52, 78) * 60_000,
         occurredOn: date,
         exercises,
+        ...effortFor(date),
       });
     }
+  }
+  // A última vez no supino e na puxada bateu o topo da faixa em todas as séries: o treino seguinte mostra a sugestão
+  // de subir a carga (progressão dupla).
+  for (const exerciseId of ["ex-supino", "ex-puxada"]) {
+    const last = [...sessions].reverse().flatMap((s) => s.exercises).find((e) => e.exerciseId === exerciseId);
+    if (last) last.sets = last.sets.map((set) => ({ ...set, weightKg: last.sets[0].weightKg, reps: last.repMax }));
   }
 
   /* ---------- Estudos ---------- */

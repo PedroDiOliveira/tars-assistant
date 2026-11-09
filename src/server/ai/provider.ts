@@ -27,6 +27,11 @@ export interface ChatRequest {
   tools: ToolDefinition[];
   maxTokens: number;
   signal: AbortSignal;
+  /**
+   * Resposta em JSON que SEGUE este schema (saída estruturada estrita: o provedor só gera o que o schema permite). Não
+   * combina com ferramentas: com `responseFormat`, `tools` deve vir vazio.
+   */
+  responseFormat?: { name: string; schema: Record<string, unknown> };
 }
 
 export interface ChatResult {

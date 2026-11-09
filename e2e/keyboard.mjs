@@ -264,7 +264,7 @@ try {
 
   // ---------- assistente: o campo de mensagem fica numa barra fixa embaixo ----------
   await appReady("/assistente");
-  const composer = page.getByLabel("Mensagem para o assistente");
+  const composer = page.getByLabel("Mensagem para o Tars");
   await composer.focus();
   await setKeyboard(KEYBOARD);
   const box = await composer.boundingBox();

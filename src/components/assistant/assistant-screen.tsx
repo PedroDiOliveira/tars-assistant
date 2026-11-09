@@ -1,5 +1,6 @@
 "use client";
 
+import { ASSISTANT } from "@/lib/constants";
 import { useEffect, useRef, useState } from "react";
 import { withStoreGate } from "@/components/layout/store-gate";
 import { ArrowUp, Info, Sparkles } from "lucide-react";
@@ -155,7 +156,7 @@ function AssistantScreenContent() {
 
   return (
     <div data-module="primary" className="flex min-h-dvh flex-col">
-      <SubHeader title="Assistente" backHref="/inicio" />
+      <SubHeader title={ASSISTANT.name} backHref="/inicio" />
 
       {/* O espaço embaixo cresce com o teclado: a barra fixa sobe e não pode esconder o fim da conversa. */}
       <div className="flex-1 space-y-5 px-4 pt-2" style={{ paddingBottom: "calc(12rem + var(--kb-inset))" }}>
@@ -172,21 +173,21 @@ function AssistantScreenContent() {
         {unavailable ? (
           <div role="status" className="flex gap-2 rounded-xl bg-muted p-4 text-sm">
             <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-            <p>O assistente não está configurado neste app. Lançamentos, musculação, corrida, estudos e leitura funcionam normalmente pelos formulários.</p>
+            <p>{ASSISTANT.The} não está configurado neste app. Lançamentos, musculação, corrida, estudos e leitura funcionam normalmente pelos formulários.</p>
           </div>
         ) : null}
 
         {account.isLive && !unavailable && consent === false ? (
           <div role="region" aria-label="Aviso de privacidade" className="space-y-3 rounded-xl bg-warning-soft p-4 text-sm text-warning-ink">
             <p className="flex items-center gap-2 font-semibold">
-              <Info className="size-4 shrink-0" aria-hidden /> Antes de usar o assistente
+              <Info className="size-4 shrink-0" aria-hidden /> Antes de conversar com {ASSISTANT.the}
             </p>
             <p>
               Suas mensagens e os resumos necessários para respondê-las (totais e nomes de categorias, matérias e livros)
               serão enviados a {account.aiProvider ?? "um provedor de IA"}. Descrições dos seus lançamentos não são enviadas.
-              O uso de IA pode gerar custo. O resto do app funciona sem o assistente.
+              O uso de IA pode gerar custo. O resto do app funciona sem {ASSISTANT.the}.
             </p>
-            <Button onClick={acceptAiConsent}>Entendi, usar o assistente</Button>
+            <Button onClick={acceptAiConsent}>Entendi, conversar com {ASSISTANT.the}</Button>
           </div>
         ) : null}
 
@@ -233,9 +234,9 @@ function AssistantScreenContent() {
             <Input
               value={text}
               maxLength={200}
-              placeholder={unavailable ? "Assistente não configurado" : consent === false ? "Aceite o aviso para usar o assistente" : "Pergunte ou descreva um gasto"}
+              placeholder={unavailable ? `${ASSISTANT.The} não está configurado` : consent === false ? `Aceite o aviso para conversar com ${ASSISTANT.the}` : "Pergunte ou descreva um gasto"}
               disabled={consent !== true}
-              aria-label="Mensagem para o assistente"
+              aria-label={`Mensagem para ${ASSISTANT.the}`}
               onChange={(e) => setText(e.target.value)}
               className="rounded-full px-4"
             />

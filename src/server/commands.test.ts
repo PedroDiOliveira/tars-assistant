@@ -4,8 +4,9 @@ import { loadSnapshot, type RpcClient } from "./commands";
 const client = (data: unknown): RpcClient => ({ rpc: async () => ({ data, error: null }) });
 
 const complete = {
-  serverNow: 1, profile: null, categories: [], transactions: [], templates: [], goals: [], exercises: [], plans: [],
+  serverNow: 1, schemaVersion: 18, profile: null, categories: [], transactions: [], templates: [], goals: [], exercises: [], plans: [],
   sessions: [], subjects: [], studySessions: [], timer: null, books: [], readingSessions: [], runningSessions: [], waterIntakes: [],
+  trainingProfile: null, trainingPlans: [], trainingPlanChanges: [],
 };
 
 describe("loadSnapshot: implantação fora de ordem", () => {
@@ -36,6 +37,44 @@ describe("loadSnapshot: implantação fora de ordem", () => {
     void _r;
     void _w;
     expect(await loadSnapshot(client(old))).toMatchObject({ ok: false, error: expect.stringContaining("Corrida") });
+  });
+
+  it("banco sem a migração 16 (sem versão do esquema): recusa abrir em vez de perder o \"como foi?\" e o vínculo em silêncio", async () => {
+    const { schemaVersion: _omitted, ...beforeTraining } = complete;
+    void _omitted;
+    const expected = {
+      ok: false,
+      code: "unknown",
+      error: "O banco ainda não tem a atualização de Treino (como foi e biblioteca). Aplique a migração 20261028000016_training_foundation e recarregue.",
+    };
+    expect(await loadSnapshot(client(beforeTraining))).toEqual(expected);
+    expect(await loadSnapshot(client({ ...complete, schemaVersion: 15 }))).toEqual(expected);
+  });
+
+  it("banco com a migração 16 mas sem a 17: recusa abrir e aponta a do plano de treino", async () => {
+    const { trainingProfile: _p, trainingPlans: _t, ...beforePlan } = complete;
+    void _p;
+    void _t;
+    expect(await loadSnapshot(client({ ...beforePlan, schemaVersion: 16 }))).toEqual({
+      ok: false,
+      code: "unknown",
+      error: "O banco ainda não tem a atualização de Plano de treino. Aplique a migração 20261028000017_training_plan e recarregue.",
+    });
+  });
+
+  it("banco com a 17 mas sem a 18: recusa abrir e aponta a dos ajustes no plano (o que quer que o app grave lá)", async () => {
+    const { trainingPlanChanges: _c, ...beforeChanges } = complete;
+    void _c;
+    expect(await loadSnapshot(client({ ...beforeChanges, schemaVersion: 17 }))).toEqual({
+      ok: false,
+      code: "unknown",
+      error: "O banco ainda não tem a atualização de Ajustes no plano de treino. Aplique a migração 20261108000018_training_plan_changes e recarregue.",
+    });
+  });
+
+  it("banco com a versão do esquema atual (ou mais nova) abre normalmente", async () => {
+    expect(await loadSnapshot(client(complete))).toMatchObject({ ok: true });
+    expect(await loadSnapshot(client({ ...complete, schemaVersion: 19 }))).toMatchObject({ ok: true });
   });
 
   it("qualquer outro formato quebrado continua sendo o erro genérico", async () => {

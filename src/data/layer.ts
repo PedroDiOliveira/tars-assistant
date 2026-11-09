@@ -1,6 +1,6 @@
 import type { DataSnapshot } from "@/domain/summary";
 import type { StudyTimer, TxTemplate, WorkoutDraft } from "@/domain/types";
-import type { Actions, AssistantApi, Result } from "./contract";
+import type { Actions, AssistantApi, Result, TrainingPlanApi } from "./contract";
 
 /** Estado de carregamento dos dados. Telas só renderizam em "ready". */
 export type StoreStatus =
@@ -35,6 +35,7 @@ export interface DataLayer {
   useAccount(): Account;
   actions: Actions;
   assistant: AssistantApi;
+  trainingPlan: TrainingPlanApi;
   /** Encerra a sessão e apaga os dados locais do usuário. Em falha, a sessão continua e o erro é devolvido. */
   signOut(): Promise<Result>;
   /**

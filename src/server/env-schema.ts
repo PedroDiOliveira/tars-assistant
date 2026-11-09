@@ -19,6 +19,8 @@ const schema = z
     // genéricas de propósito: uma variável XAI_API_KEY guardando uma chave da Groq seria enganosa.
     AI_PROVIDER: z.preprocess(blank, z.enum(["xai", "groq", "none"]).default("none")),
     AI_MODEL: optional(z.string().min(1)),
+    /** opcional: modelo só para gerar o plano de treino (raro e pesado); sem ele, vale o AI_MODEL */
+    AI_PLAN_MODEL: optional(z.string().min(1)),
     AI_API_KEY: optional(z.string().min(1)),
     /** opcional: o padrão vem do provedor (ver `src/server/ai/factory.ts`) */
     AI_BASE_URL: optional(z.url()),

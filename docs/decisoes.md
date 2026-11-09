@@ -177,3 +177,51 @@ Um respiro dentro do app, em `/respirar` (sem aba). A entrada é um ícone de ve
 - **Sem háptico.** `navigator.vibrate` não existe no iOS; a experiência é completa sem ele. Fica como melhoria progressiva para outros aparelhos.
 - **Preferências** (ritmo e som) só no aparelho, como as da água (`data/breath-prefs.ts`, apagadas ao sair da conta). Nada no Supabase, nenhuma migração.
 - **Fora da primeira versão:** duração de sessão e lembretes, histórico de sessões, háptico, outros sons, ritmo personalizado, respiração pelo assistente.
+
+## Treino: base para acompanhar a evolução (fase 0 do plano de treino)
+
+Primeira etapa da ideia de um plano de treino mensal com IA (decidido com o Pedro em 2026-10-28): antes de qualquer IA, o app passa a **guardar os sinais certos** e a **devolver valor só com os dados**. Tudo aqui funciona sem IA; a fase 1 (formulário de objetivos + primeiro plano) e a fase 2 (bloco de 4 semanas + revisão) vão usar exatamente estes dados. IA da fase 1: Groq, o mesmo provedor do assistente, até a escolha definitiva.
+
+- **"Como foi o treino?"** Tocar em "Finalizar treino" abre uma folha com quatro níveis (Leve, Na medida, Pesado, Exaustivo, cada um com uma frase curta para a pessoa se avaliar sempre do mesmo jeito); **escolher já salva**, e "Finalizar sem avaliar" também. O aviso de séries pendentes, que era um diálogo à parte, foi para dentro da mesma folha: finalizar com pendências continua custando dois toques. Guardado em `workout_sessions.effort` (1–4, opcional). Aparece no histórico e no resumo do mês. É a percepção de esforço da sessão, não dado de saúde.
+- **Dor / incômodo por exercício ficou de fora de propósito.** É dado de saúde (dado sensível na LGPD) e pede consentimento próprio; entra depois da avaliação de LGPD, com o formulário da fase 1.
+- **Sugestão de carga (progressão dupla).** Quando, da última vez, TODAS as séries planejadas chegaram ao topo da faixa de repetições da ficha de hoje, com a mesma carga, o card do exercício mostra "Hora de subir: X kg" com o porquê ("Você fez 10+ reps em todas as séries com 65 kg"). **Nunca aplica sozinha**: um toque aplica nas séries por fazer, e dá para voltar. Fora desse caso (pirâmide, séries faltando, sem carga registrada, peso corporal sem carga extra) o app fica quieto. O passo vem do equipamento do exercício na biblioteca (barra, Smith e halteres 2 kg; máquina e polia 5 kg; kettlebell 4 kg); sem vínculo, ~2,5% da carga, nunca menos de 1 kg. Regra em `domain/progression.ts`.
+- **Resumo do mês** (`/treino/resumo`, entrada logo abaixo do card da semana em Musculação). Até o dia 7 abre o mês que acabou de fechar; depois, o corrente, "até agora". Mostra: treinos (com a diferença para o mês anterior), séries, tempo e volume; as semanas que tocam o mês com feito × meta e o status escrito; séries por grupo muscular (barras de um tom só, com o número escrito em toda linha); como foram os treinos; recordes (a série mais pesada do mês supera a de antes, só com histórico anterior); o que evoluiu (força estimada pela fórmula de Epley, ganho de mais de 1%, comparando a última vez no mês com a última antes dele); o que está **sem evolução recente** (3 ou mais treinos seguidos sem superar a melhor série, olhando só as 4 semanas antes do mês e o próprio mês; um exercício estagnado não aparece como "evoluiu"); e as corridas do mês. Listas longas mostram 5 itens e um "Ver todos". Tudo derivado na hora (`domain/training-report.ts`), nada guardado.
+- **Biblioteca de exercícios.** ~70 exercícios comuns de academia em PT-BR, cada um com grupo, músculos (o principal primeiro), padrão de movimento e equipamento (`domain/exercise-library.ts`). Ao cadastrar, o nome digitado busca na biblioteca (por nome ou apelido: "serrote" acha a remada unilateral) e "Usar" preenche nome, grupo e tipo de carga. Num exercício já cadastrado, a biblioteca só **vincula**: o nome e o histórico continuam os da pessoa. O vínculo aparece como "Da biblioteca: … · Halteres", com um X para desfazer. Os exercícios iniciais de toda conta nova já nascem vinculados; os que você já tem ficam sem vínculo até você editá-los (a tela sugere o exercício que bate exatamente com o nome, em primeiro). Decisões 29 e 30 em `arquitetura-backend.md`.
+- **Porta de assinatura:** não implementada (o app está em validação, com um usuário). O lugar dela está decidido (decisão 31 em `arquitetura-backend.md`): por conta, num ponto só da autorização do servidor.
+
+## Plano de treino com IA (fase 1)
+
+Segunda etapa do plano de treino (2026-10-28): **perguntas → primeiro plano → revisão → fichas**. A IA é a Groq (a mesma do assistente) até a escolha definitiva; o app todo será pago, então não há planos nem cotas por assinatura aqui.
+
+- **Entrada:** card "Montar meu plano" em Musculação (vira "Plano pronto para revisar" ou "Plano de treino · desde dd/mm"), que abre `/treino/plano`.
+- **Perguntas** (`/treino/plano/perguntas`): uma por tela, quase tudo por toque. Objetivo (massa, força, saúde e condicionamento, perder gordura), experiência, dias por semana (2–6), tempo por treino (30, 45, 60, 75+), onde treina (academia; casa com halteres), a parte de saúde, grupos para priorizar (até 2) e um "Algo mais?" de até 280 caracteres, o único texto livre que vai para a IA. "Só peso do corpo" ficou de fora: a biblioteca ainda tem poucas opções de pernas e costas sem equipamento.
+- **Parte de saúde, opcional e com consentimento antes** (LGPD, art. 11, I; ver `avaliacao-lgpd.md`). Uma tela explica para que serve e oferece "Concordo, quero responder" ou "Pular esta parte".
+  - **Quem responde:** marca dores ou limitações numa lista fixa de regiões e passa por uma triagem curta inspirada no PAR-Q.
+  - **Triagem com algum "sim":** o app recomenda liberação médica antes de começar. Ou a pessoa confirma que já tem liberação, ou volta depois.
+  - **O que fica guardado:** só o **resultado** da triagem (liberado, liberação médica ou não respondida), nunca as respostas, e o instante do consentimento.
+  - **Apagar os dados de saúde:** basta refazer as perguntas e pular a parte de saúde.
+- **Quem decide o quê** (`domain/training-rules.ts`):
+  - **As regras montam o esqueleto:**
+    - a divisão pela quantidade de dias (2–3 corpo inteiro; 4 superior/inferior; 5 superior/inferior + empurrar/puxar/pernas; 6 empurrar/puxar/pernas duas vezes);
+    - as vagas de cada treino, com os compostos primeiro;
+    - séries pela experiência (+1 nos grupos priorizados) e faixas e descansos pelo objetivo;
+    - quantas vagas cabem no tempo, com estimativa de montagem + séries + descanso + 5 min de aquecimento;
+    - a lista FECHADA de exercícios de cada vaga. Ela é filtrada pelo equipamento do local, por uma lista de cautela por região dolorida e por exercícios técnicos demais para quem está começando, e o que a pessoa já faz vem primeiro.
+  - **A IA escolhe dentro das listas, as séries e a faixa entre as permitidas, e escreve os motivos.** A resposta é saída estruturada estrita, com as opções de cada vaga no schema, então o modelo não consegue inventar exercício.
+  - **A validação confere** exercício repetido no treino e tempo. Se a resposta vier fora, há uma nova tentativa com os erros; se falhar de novo, ou com IA fora do ar ou no limite, entra o **modelo pronto**: as regras escolhem tudo, com o motivo dito na tela. **Plano inválido nunca aparece.**
+- **Lista de cautela por região** é conservadora (na dúvida, o exercício sai) e **precisa da revisão de um profissional de Educação Física antes de abrir ao público**.
+- **Revisão** (`/treino/plano`):
+  - fichas com séries × faixa, descanso, "você já faz" e o motivo de cada exercício, além do tempo estimado de cada treino e de um "Por que este plano";
+  - **Trocar** qualquer exercício por outra opção da mesma vaga, sem IA;
+  - "Gerar outro", "Refazer as perguntas" e "Descartar".
+  - A proposta fica **só no aparelho** (`data/plan-proposal.ts`, apagada ao sair da conta) até ser aceita, e sobrevive a fechar o app. Se as respostas mudarem depois dela, a tela pede um plano novo.
+- **"Usar este plano"** cria as fichas novas (com a observação "Do plano de treino de dd/mm") e, por padrão, **arquiva** as fichas atuais (dá para desligar). Os exercícios que você já tem são **reaproveitados** (pelo vínculo, ou pelo nome igual ao da biblioteca), e os que faltam nascem vinculados. Tudo num comando só (`training.applyPlan`): ou entra tudo, ou nada. O plano aceito guarda origem, modelo, versão do prompt e das regras, motivos e quantas trocas você fez, base da revisão mensal (fase 2) e das métricas.
+- **Formulário que lembra onde parou.** O Next 16 mantém a tela escondida em vez de desmontá-la: sair no meio das perguntas e voltar retoma de onde parou. Depois de concluir, a próxima visita começa do início, com as respostas anteriores marcadas.
+- **O que a avaliação com a Groq de verdade mostrou** (`src/server/ai/plan.eval.live.test.ts`, 5 perfis de referência, 2026-10-28):
+  - **Na camada gratuita, uma geração usa de 3 a 8 mil tokens**, e o limite é de 8 mil por minuto. Um segundo pedido no mesmo minuto ("Gerar outro", ou uma nova tentativa) costuma ser recusado (429 ou 413), e o plano maior (5 dias de 75 min) fica no limite.
+  - **A saída estruturada estrita às vezes falha do lado da Groq** ("JSON fora do schema", HTTP 400). Por isso há uma nova tentativa nesse caso.
+  - **Raciocínio "medium" estourava o teto de saída**, cortando o JSON. Ficou "low", como no chat.
+  - **Na rodada final, 3 de 5 perfis saíram da IA** e 2 do modelo pronto, por limite. Todos os planos foram válidos.
+  - **Qualidade:** o `gpt-oss-120b` escolhe melhor (motivos ligados às dores) e pode ser ligado só no plano com `AI_PLAN_MODEL`. Os dois modelos às vezes afirmam no resumo uma preferência que não atenderam por inteiro, e o prompt agora proíbe isso.
+  - **Conclusão para o produto:** a camada gratuita serve para validar com uma pessoa. Para o público, o plano precisa de uma camada paga ou de um provedor com mais folga por minuto, o que entra no levantamento de IA.
+- **Fica para a fase 2:** bloco de 4 semanas a partir do aceite, perguntas do fim do bloco e proposta com diferenças e motivos.

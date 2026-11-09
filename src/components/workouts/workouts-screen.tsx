@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronRight, Dumbbell, Flame, Pencil, Play, Plus } from "lucide-react";
+import { ChartNoAxesColumn, ChevronRight, Dumbbell, Flame, Pencil, Play, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { withStoreGate } from "@/components/layout/store-gate";
 import { GoalSheet } from "@/components/goals/goal-sheet";
@@ -13,9 +13,12 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { Surface } from "@/components/shared/surface";
 import { WeekDots } from "@/components/shared/week-dots";
+import { PlanCard } from "@/components/training-plan/plan-card";
 import { PlanSheet } from "@/components/workouts/plan-sheet";
 import { activeOnly } from "@/domain/catalog";
 import { workoutSummary } from "@/domain/summary";
+import { defaultReportMonth } from "@/domain/training-report";
+import { currentTrainingPlan, nextPlanInRotation } from "@/domain/training-proposal";
 import type { WorkoutPlan } from "@/domain/types";
 import {
   daysSinceLastPlan,
@@ -26,7 +29,8 @@ import {
   sortSessionsDesc,
 } from "@/domain/workouts";
 import { useActions, useData, useDraft, useNow, useToday } from "@/data";
-import { formatDayRelative, formatMinutes, pluralize } from "@/lib/format";
+import { monthOf } from "@/lib/dates";
+import { formatDayRelative, formatMinutes, formatMonthName, pluralize } from "@/lib/format";
 
 const TOP_EXERCISES = 4;
 
@@ -38,6 +42,7 @@ function WorkoutsScreenContent() {
   const { startWorkout, cancelWorkout } = useActions();
 
   const week = useMemo(() => workoutSummary(data, today), [data, today]);
+  const reportMonth = defaultReportMonth(today);
   const recent = useMemo(() => sortSessionsDesc(data.sessions).slice(0, 3), [data.sessions]);
   const exerciseById = useMemo(() => new Map(data.exercises.map((e) => [e.id, e])), [data.exercises]);
   const trained = useMemo(
@@ -59,6 +64,11 @@ function WorkoutsScreenContent() {
   const [allExercises, setAllExercises] = useState(false);
   const [planSheet, setPlanSheet] = useState<{ open: boolean; plan: WorkoutPlan | null }>({ open: false, plan: null });
   const plans = useMemo(() => activeOnly(data.plans), [data.plans]);
+  // Rodízio do plano atual (ex.: 3 treinos em 5 dias): qual ficha vem agora.
+  const nextPlanId = useMemo(
+    () => nextPlanInRotation(currentTrainingPlan(data.trainingPlans), data.sessions, new Set(plans.map((p) => p.id))),
+    [data.trainingPlans, data.sessions, plans],
+  );
 
   function begin(planId: string) {
     if (draft && draft.planId !== planId) {
@@ -108,6 +118,29 @@ function WorkoutsScreenContent() {
       {/* Em andamento */}
       {draft ? <InProgressCard onContinue={() => router.push("/treino/sessao")} onDiscard={() => setDiscardOpen(true)} /> : null}
 
+      {/* Resumo do mês (nos primeiros dias, o do mês que fechou) */}
+      {data.sessions.length > 0 ? (
+        <Surface className="overflow-hidden">
+          <Link href="/treino/resumo" className="flex min-h-14 items-center gap-3 px-4 py-3 transition active:bg-muted/60">
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-m-soft text-m-ink">
+              <ChartNoAxesColumn className="size-[18px]" aria-hidden />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium">Resumo do mês</span>
+              <span className="block truncate text-sm text-muted-foreground">
+                {reportMonth === monthOf(today)
+                  ? `${formatMonthName(reportMonth)} até agora: recordes, evolução e semanas`
+                  : `${formatMonthName(reportMonth)} fechou: veja como foi`}
+              </span>
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" aria-hidden />
+          </Link>
+        </Surface>
+      ) : null}
+
+      {/* Plano de treino (montar, revisar a proposta ou ver o atual) */}
+      <PlanCard />
+
       {/* Fichas */}
       <section className="space-y-2">
         <div className="flex items-center justify-between px-1">
@@ -142,7 +175,12 @@ function WorkoutsScreenContent() {
               return (
                 <div key={plan.id} className="flex items-center gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{plan.name}</p>
+                    <p className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-medium">{plan.name}</span>
+                      {plan.id === nextPlanId ? (
+                        <span className="shrink-0 rounded-full bg-m-soft px-2 py-0.5 text-xs font-semibold text-m-ink">Próximo</span>
+                      ) : null}
+                    </p>
                     <p className="truncate text-sm text-muted-foreground">
                       {main || `${plan.exercises.length} exercícios`} ·{" "}
                       {since === null

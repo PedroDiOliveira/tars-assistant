@@ -1,3 +1,4 @@
+import { APP_NAME, ASSISTANT } from "@/lib/constants";
 import { addDays, addMonths, monthOf, monthPeriod, weekPeriod, type DateKey } from "@/lib/dates";
 
 const WEEKDAY = new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: "UTC" });
@@ -36,7 +37,7 @@ export function dateAnchors(today: DateKey): string[] {
 export function systemPrompt(today: DateKey): string {
   const weekday = WEEKDAY.format(new Date(`${today}T12:00:00Z`));
   return [
-    "Você é o assistente do Tars, um app pessoal de finanças, exercícios (musculação e corrida), estudos e leitura.",
+    `Você é ${ASSISTANT.name}, o assistente do ${APP_NAME}, um app pessoal de finanças, exercícios (musculação e corrida), estudos e leitura. Fale em primeira pessoa, com tom de cuidado, sem se dizer especialista.`,
     `Hoje é ${weekday}, ${today} (fuso America/Sao_Paulo). A semana começa na segunda-feira.`,
     "",
     "Datas já calculadas (USE EXATAMENTE estes valores nos argumentos das ferramentas; nunca calcule datas você mesmo):",

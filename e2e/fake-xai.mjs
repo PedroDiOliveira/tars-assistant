@@ -11,6 +11,9 @@
  *   - contém "quanto gastei"   -> get_financial_summary do mês de hoje (testado ANTES de "gastei", que ele contém)
  *   - contém "gastei"          -> propose_transaction (valor = primeiro número; "ontem" resolvido pela data do prompt)
  *   - qualquer outra coisa     -> pergunta o que faltou
+ *
+ * Pedido com `response_format` (saída estruturada, o plano de treino): responde um JSON que segue o schema recebido,
+ * escolhendo a primeira opção de cada enum (e, no "exercicio", a primeira que ainda não foi usada no mesmo treino).
  */
 import http from "node:http";
 
@@ -78,6 +81,28 @@ export async function startFakeXai({ port = 54398, apiKey = "xai-chave-de-teste"
     return { content: "Não entendi. Qual foi o valor e o que foi?" };
   }
 
+  /** Um JSON que segue o schema: a primeira opção de cada enum, sem repetir exercício entre vagas irmãs. */
+  function fromSchema(schema, siblings = new Set()) {
+    if (schema.type === "object") {
+      const used = new Set();
+      return Object.fromEntries(
+        Object.entries(schema.properties).map(([key, child]) => {
+          if (key === "exercicio" && child.enum) {
+            const pick = child.enum.find((value) => !siblings.has(value)) ?? child.enum[0];
+            siblings.add(pick);
+            return [key, pick];
+          }
+          return [key, fromSchema(child, used)];
+        }),
+      );
+    }
+    if (schema.enum) return schema.enum[0];
+    if (schema.type === "string") return "Resposta do modelo falso.";
+    if (schema.type === "integer" || schema.type === "number") return 1;
+    if (schema.type === "boolean") return false;
+    return null;
+  }
+
   const server = http.createServer((req, res) => {
     const chunks = [];
     req.on("data", (c) => chunks.push(c));
@@ -88,6 +113,13 @@ export async function startFakeXai({ port = 54398, apiKey = "xai-chave-de-teste"
 
       const body = JSON.parse(Buffer.concat(chunks).toString() || "{}");
       received.push({ headers: req.headers, body });
+      if (body.response_format?.type === "json_schema") {
+        const content = JSON.stringify(fromSchema(body.response_format.json_schema.schema));
+        return reply(res, 200, {
+          choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 3000, completion_tokens: 900, total_tokens: 3900 },
+        });
+      }
       const decision = decide(body.messages);
       if (decision === null) return reply(res, 500, { error: "erro interno simulado" });
 

@@ -16,6 +16,7 @@ import { fail, ok, type Actions, type LocalActions, type Result } from "../contr
 import type { Account, DataLayer, StoreStatus } from "../layer";
 import { isDraftHydrated, subscribeDraftHydrated, useDraftStore } from "./draft-store";
 import { remoteAssistant } from "./assistant-client";
+import { remoteTrainingPlan } from "./plan-client";
 import { wipeLocalUserData } from "./local-data";
 import type { SnapshotPayload } from "./payload";
 import { discardEntry, startBurst, type Burst } from "./optimistic";
@@ -133,6 +134,9 @@ function selectData({ data }: SnapshotPayload): DataSnapshot {
     readingSessions: data.readingSessions,
     runningSessions: data.runningSessions,
     waterIntakes: data.waterIntakes,
+    trainingProfile: data.trainingProfile,
+    trainingPlans: data.trainingPlans,
+    trainingPlanChanges: data.trainingPlanChanges,
   };
 }
 
@@ -222,6 +226,7 @@ export const remoteLayer: DataLayer = {
   useAccount,
   actions,
   assistant: remoteAssistant,
+  trainingPlan: remoteTrainingPlan,
   signOut,
   updateDisplayName,
 };
